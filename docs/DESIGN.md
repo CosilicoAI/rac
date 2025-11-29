@@ -1171,7 +1171,7 @@ class BiTemporalValue:
     """A value with two temporal dimensions."""
     value: Any
     effective_date: Date      # When the policy takes effect
-    knowledge_date: Date      # When this value was enacted/known
+    vintage: Date      # When this value was enacted/known
     superseded_date: Optional[Date]  # When this was replaced by newer knowledge
 
     # Provenance
@@ -1206,7 +1206,7 @@ class BiTemporalParameter:
         # 3. Haven't been superseded by as_of
         candidates = [
             v for v in self.values
-            if v.knowledge_date <= as_of
+            if v.vintage <= as_of
             and v.effective_date <= effective
             and (v.superseded_date is None or v.superseded_date > as_of)
         ]
@@ -1231,7 +1231,7 @@ federal_tax_brackets = BiTemporalParameter(
         BiTemporalValue(
             value=PRE_TCJA_BRACKETS,
             effective_date=Date(2017, 1, 1),
-            knowledge_date=Date(2000, 1, 1),  # Approximate
+            vintage=Date(2000, 1, 1),  # Approximate
             superseded_date=Date(2017, 12, 22),  # When TCJA was signed
         ),
 
@@ -1239,7 +1239,7 @@ federal_tax_brackets = BiTemporalParameter(
         BiTemporalValue(
             value=TCJA_BRACKETS_2018,
             effective_date=Date(2018, 1, 1),
-            knowledge_date=Date(2017, 12, 22),
+            vintage=Date(2017, 12, 22),
         ),
         # ... 2019-2025 values ...
 
@@ -1248,14 +1248,14 @@ federal_tax_brackets = BiTemporalParameter(
         BiTemporalValue(
             value=PRE_TCJA_BRACKETS_INFLATION_ADJUSTED,
             effective_date=Date(2026, 1, 1),
-            knowledge_date=Date(2017, 12, 22),  # Sunset was in original law
+            vintage=Date(2017, 12, 22),  # Sunset was in original law
         ),
 
         # IF Congress extends TCJA, we'd add:
         BiTemporalValue(
             value=EXTENDED_BRACKETS_2026,
             effective_date=Date(2026, 1, 1),
-            knowledge_date=Date(2025, 12, 15),  # Hypothetical extension date
+            vintage=Date(2025, 12, 15),  # Hypothetical extension date
             superseded_date=None,  # Now the current knowledge
         ),
     ]
@@ -1284,10 +1284,10 @@ class ParameterStore:
             path TEXT,
             value JSONB,
             effective_date DATE,
-            knowledge_date DATE,
+            vintage DATE,
             superseded_date DATE,
             enacted_by TEXT,
-            PRIMARY KEY (path, effective_date, knowledge_date)
+            PRIMARY KEY (path, effective_date, vintage)
         );
         """
         ...
@@ -1299,7 +1299,7 @@ class ParameterStore:
 
         path: gov.irs.income.brackets
         history:
-          - knowledge_date: 2017-12-22
+          - vintage: 2017-12-22
             enacted_by: P.L. 115-97  # TCJA
             values:
               - effective: 2018-01-01
@@ -1307,7 +1307,7 @@ class ParameterStore:
               - effective: 2026-01-01  # Sunset
                 value: {brackets: [...]}  # Pre-TCJA rates
 
-          - knowledge_date: 2025-12-15  # Hypothetical future
+          - vintage: 2025-12-15  # Hypothetical future
             enacted_by: P.L. 119-XX  # Extension
             supersedes: 2017-12-22  # Supersedes sunset provision
             values:
@@ -1368,7 +1368,7 @@ tcja_extended = ParameterScenario(
         "gov.irs.income.brackets": BiTemporalValue(
             value=TCJA_BRACKETS_EXTENDED,
             effective_date=Date(2026, 1, 1),
-            knowledge_date=Date.today(),
+            vintage=Date.today(),
         ),
     }
 )
@@ -2201,19 +2201,66 @@ OpenStates is valuable infrastructure for bill tracking. Cosilico builds on this
 2. Connection to executable simulations
 3. Bidirectional translation (law ↔ code)
 
-### 15.6 Data Sources
+### 15.6 Document Hierarchy
 
-| Source | Content | Format | Update Frequency |
-|--------|---------|--------|------------------|
-| **USLM** | US Code | XML (USLM schema) | Continuous |
-| **eCFR** | Code of Federal Regulations | XML | Daily |
-| **Congress.gov** | Federal bills | XML/JSON API | Real-time |
-| **State legislatures** | State bills | Varies (50 different) | Real-time |
-| **Westlaw/LexisNexis** | Annotated statutes | Proprietary | N/A (cost) |
-| **Cornell LII** | Free legal resources | HTML | Weekly |
-| **IRS.gov** | Tax forms, instructions | PDF/XML | Annual + updates |
-| **SSA POMS** | Social Security manual | HTML | Continuous |
-| **State agency sites** | Program rules | HTML/PDF | Varies |
+Legal authority flows from statutes through regulations to agency guidance. Each level can create policy:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         STATUTES                                     │
+│  Highest authority. Enacted by legislatures.                        │
+│  Examples: Internal Revenue Code, Social Security Act               │
+└─────────────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                       REGULATIONS                                    │
+│  Implement statutes. Notice-and-comment rulemaking.                 │
+│  Examples: Treasury Regulations, CFR Title 20 (SSA)                 │
+└─────────────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                     AGENCY GUIDANCE                                  │
+│  Interpret regulations. Less formal but binding in practice.        │
+│                                                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │  Tax Forms   │  │   Program    │  │   Revenue    │              │
+│  │ & Instructions│  │   Manuals   │  │   Rulings    │              │
+│  └──────────────┘  └──────────────┘  └──────────────┘              │
+│                                                                      │
+│  Examples:                                                           │
+│  - IRS Form 1040 instructions (define "income" in practice)        │
+│  - SSA POMS (Program Operations Manual System)                     │
+│  - SNAP Handbook (state-specific benefit rules)                    │
+│  - Medicaid State Plan Amendments                                  │
+│  - Revenue Rulings, Revenue Procedures, PLRs                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Why agency guidance matters:**
+
+Many policy details exist only in guidance, not in statute or regulation:
+- Tax form worksheets define computational steps
+- Program manuals specify verification procedures
+- State handbooks interpret federal rules locally
+- Agency memos clarify ambiguous statutory language
+
+### 15.7 Data Sources
+
+| Source | Document Type | Content | Format | Update Frequency |
+|--------|---------------|---------|--------|------------------|
+| **USLM** | Statute | US Code | XML (USLM schema) | Continuous |
+| **eCFR** | Regulation | Code of Federal Regulations | XML | Daily |
+| **Congress.gov** | Bill | Federal legislation | XML/JSON API | Real-time |
+| **State legislatures** | Bill | State legislation | Varies (50 different) | Real-time |
+| **IRS.gov/forms** | Form | Tax forms & instructions | PDF/XML | Annual + updates |
+| **IRS.gov/irb** | Guidance | Revenue rulings, procedures | PDF/HTML | Weekly |
+| **SSA POMS** | Manual | Social Security operations | HTML | Continuous |
+| **CMS.gov** | Manual | Medicare/Medicaid guidance | PDF/HTML | Varies |
+| **FNS.gov** | Manual | SNAP policy guidance | PDF | Periodic |
+| **State DHS/DSS** | Manual | State benefit handbooks | PDF/HTML | Varies |
+| **State tax agencies** | Form | State tax forms | PDF | Annual |
+| **Cornell LII** | Aggregator | Free legal resources | HTML | Weekly |
+| **Westlaw/LexisNexis** | Annotator | Annotated statutes | Proprietary | N/A (cost) |
 
 ### 15.7 Implementation Phases
 
