@@ -49,6 +49,34 @@ Policy rules engines face several challenges:
 
 ## 2. Architecture Overview
 
+### Language Choice: Custom DSL
+
+Cosilico uses a purpose-built domain-specific language (`.cosilico` files) rather than Python decorators. See **[DSL.md](./DSL.md)** for the full specification.
+
+**Key reasons for a custom DSL:**
+
+1. **Safety** - Untrusted code (AI-generated, user-submitted) cannot escape sandbox
+2. **Multi-target compilation** - Clean IR enables Python, JS, WASM, SQL, Spark backends
+3. **Legal-first design** - Citations are syntax, not comments
+4. **AI-native** - Constrained grammar is easier to generate correctly
+5. **Formal verification** - Amenable to proving properties
+
+```cosilico
+# Example: EITC in Cosilico DSL
+variable eitc {
+  entity TaxUnit
+  period Year
+  dtype Money
+  reference "26 USC § 32"
+
+  formula {
+    let phase_in = variable(eitc_phase_in)
+    let max_credit = parameter(gov.irs.eitc.max_amount)
+    return max(0, min(phase_in, max_credit) - variable(eitc_phase_out))
+  }
+}
+```
+
 ### High-Level Design
 
 ```
