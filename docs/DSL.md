@@ -1669,7 +1669,7 @@ Every calculation includes full provenance:
 
 Government sources disappear. Websites restructure, PDFs get removed, links rot. Every citation must be backed by an archived copy.
 
-> **Prior art:** See [PolicyEngine/atlas](https://github.com/PolicyEngine/atlas) for an example of policy document archival.
+> **Vision:** Inspired by [PolicyEngine/atlas](https://github.com/PolicyEngine/atlas) proposal - document archival and knowledge graphs should be first-class API features, not afterthoughts.
 
 **The problem:**
 
@@ -1911,6 +1911,108 @@ pending_amendments:
     title: "Working Families Tax Relief Act"
     status: "Passed House, pending Senate"
     would_amend: [subsection_b, subsection_c]
+```
+
+**API integration - archives as first-class feature:**
+
+```bash
+# REST API endpoints for document access
+
+# Get document by ID
+GET /api/v1/archives/irs-pub-596-2024
+# Returns: metadata + download URL
+
+# Get document for a specific statute
+GET /api/v1/archives/statute/26-usc-32
+# Returns: current version + version history
+
+# Get all documents cited by a rule
+GET /api/v1/rules/us.federal.irs.credits.eitc/sources
+# Returns: list of archived documents with sections
+
+# Get all rules that cite a document
+GET /api/v1/archives/irs-pub-596-2024/citations
+# Returns: rules and parameters referencing this doc
+
+# Search across all archived documents
+GET /api/v1/archives/search?q=phase-in+rate&jurisdiction=us.federal
+# Returns: matching documents with snippets
+
+# Get document as of a specific date (for statute versioning)
+GET /api/v1/archives/statute/26-usc-32?as_of=2021-06-01
+# Returns: ARPA-amended version
+
+# Knowledge graph: what affects EITC?
+GET /api/v1/graph/us.federal.irs.credits.eitc
+# Returns: statutes, regulations, parameters, indices, related programs
+```
+
+**Calculation responses include source links:**
+
+```json
+{
+  "variable": "eitc",
+  "value": 3584,
+  "sources": [
+    {
+      "type": "statute",
+      "citation": "26 USC § 32",
+      "archive_id": "usc-26-32",
+      "url": "/api/v1/archives/usc-26-32",
+      "relevant_sections": ["(a)(1)", "(b)(2)"]
+    },
+    {
+      "type": "parameter",
+      "path": "gov.irs.eitc.max_amount",
+      "citation": "Rev. Proc. 2023-34",
+      "archive_id": "rev-proc-2023-34",
+      "url": "/api/v1/archives/rev-proc-2023-34",
+      "page": 7
+    }
+  ],
+  "trace_url": "/api/v1/calculations/{id}/trace"
+}
+```
+
+**Knowledge graph for program interconnections:**
+
+```yaml
+# Graph shows how programs connect
+
+GET /api/v1/graph/snap
+
+{
+  "program": "snap",
+  "jurisdiction": "us.federal",
+
+  "statutes": [
+    {"id": "7-usc-2011", "title": "Food and Nutrition Act of 2008"}
+  ],
+
+  "regulations": [
+    {"id": "7-cfr-273", "title": "SNAP Eligibility and Benefits"}
+  ],
+
+  "parameters_from": [
+    {"id": "poverty_guidelines", "source": "HHS"},
+    {"id": "thrifty_food_plan", "source": "USDA"}
+  ],
+
+  "affects": [
+    {"program": "medicaid", "relationship": "categorical_eligibility"},
+    {"program": "school_meals", "relationship": "direct_certification"}
+  ],
+
+  "affected_by": [
+    {"program": "tanf", "relationship": "income_exclusion"},
+    {"program": "ssi", "relationship": "income_exclusion"}
+  ],
+
+  "state_variations": {
+    "count": 50,
+    "examples": ["ca_calfresh_restaurant_meals", "ny_hep"]
+  }
+}
 ```
 
 ### 7.12 Directory Structure
