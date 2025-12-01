@@ -1,6 +1,6 @@
 # Cosilico Core Design Document
 
-## Executive Summary
+## Executive summary
 
 Cosilico Core is a policy rules engine designed from first principles for modern use cases:
 
@@ -14,9 +14,9 @@ This document outlines the architecture, key abstractions, and implementation st
 
 ---
 
-## 1. Problem Statement
+## 1. Problem statement
 
-### Current Pain Points
+### Current pain points
 
 Policy rules engines face several challenges:
 
@@ -29,7 +29,7 @@ Policy rules engines face several challenges:
 | **Correctness** | Runtime errors in production | Extensive testing |
 | **Licensing** | AGPL prevents enterprise use | Avoid or rewrite |
 
-### Target Use Cases
+### Target use cases
 
 1. **Microsimulation**: 100M+ households, research analysis
 2. **Real-time API**: < 100ms, 1000+ req/s, production services
@@ -37,7 +37,7 @@ Policy rules engines face several challenges:
 4. **Benefit administration**: Legally accurate, auditable
 5. **Financial services**: Tax planning, portfolio optimization
 
-### Success Criteria
+### Success criteria
 
 - Process US Census data (130M households) in < 1 hour on commodity hardware
 - API p99 latency < 100ms for household calculations
@@ -47,9 +47,9 @@ Policy rules engines face several challenges:
 
 ---
 
-## 2. Architecture Overview
+## 2. Architecture overview
 
-### Language Choice: Custom DSL
+### Language choice: custom DSL
 
 Cosilico uses a purpose-built domain-specific language (`.cosilico` files) rather than Python decorators. See **[DSL.md](./DSL.md)** for the full specification.
 
@@ -77,7 +77,7 @@ variable eitc {
 }
 ```
 
-### High-Level Design
+### High-level design
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -143,7 +143,7 @@ variable eitc {
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+### Component responsibilities
 
 | Component | Responsibility | Key Outputs |
 |-----------|---------------|-------------|
@@ -156,7 +156,7 @@ variable eitc {
 
 ---
 
-## 3. Core Abstractions
+## 3. Core abstractions
 
 ### 3.1 Variables
 
@@ -363,11 +363,11 @@ class QuantityType(Enum):
 
 ---
 
-## 4. Intermediate Representation (IR)
+## 4. Intermediate representation (IR)
 
 The IR is the key to multi-target compilation.
 
-### 4.1 IR Node Types
+### 4.1 IR node types
 
 ```python
 @dataclass(frozen=True)
@@ -444,7 +444,7 @@ class IRPeriodRef(IRNode):
     offset: int  # -1 for previous year, etc.
 ```
 
-### 4.2 IR Graph
+### 4.2 IR graph
 
 ```python
 @dataclass
@@ -514,9 +514,9 @@ IRGraph(
 
 ---
 
-## 5. Code Generation
+## 5. Code generation
 
-### 5.1 Python Generator
+### 5.1 Python generator
 
 **Target**: NumPy-based vectorized code for microsimulation.
 
@@ -578,7 +578,7 @@ def calculate(inputs, n_entities):
     }
 ```
 
-### 5.2 JavaScript Generator
+### 5.2 JavaScript generator
 
 **Target**: Browser-executable code with typed arrays.
 
@@ -637,7 +637,7 @@ function calculate(inputs) {
 export { calculate };
 ```
 
-### 5.3 SQL Generator
+### 5.3 SQL generator
 
 **Target**: Batch processing in data warehouses.
 
@@ -690,9 +690,9 @@ FROM income_tax
 
 ---
 
-## 6. Execution Strategies
+## 6. Execution strategies
 
-### 6.1 Single Household (API)
+### 6.1 Single household (API)
 
 ```python
 class SingleHouseholdExecutor:
@@ -713,7 +713,7 @@ class SingleHouseholdExecutor:
 
 **Performance Target**: < 1ms per calculation
 
-### 6.2 Batch (Microsimulation)
+### 6.2 Batch (microsimulation)
 
 ```python
 class BatchExecutor:
@@ -738,7 +738,7 @@ class BatchExecutor:
 
 **Performance Target**: 1M households/second on 8-core machine
 
-### 6.3 Distributed (Census Scale)
+### 6.3 Distributed (census scale)
 
 ```python
 class SparkExecutor:
@@ -756,9 +756,9 @@ class SparkExecutor:
 
 ---
 
-## 7. Memory Management
+## 7. Memory management
 
-### 7.1 Copy-on-Write for Scenarios
+### 7.1 Copy-on-write for scenarios
 
 ```python
 class Scenario:
@@ -793,7 +793,7 @@ class Scenario:
         return Scenario(base=self)
 ```
 
-### 7.2 Memory Budget
+### 7.2 Memory budget
 
 ```python
 class MemoryBudget:
@@ -821,9 +821,9 @@ class MemoryBudget:
 
 ---
 
-## 8. Error Handling and Debugging
+## 8. Error handling and debugging
 
-### 8.1 Compile-Time Errors
+### 8.1 Compile-time errors
 
 ```python
 @dataclass
@@ -852,7 +852,7 @@ class CyclicDependencyError(CompileError):
     cycle: List[str]
 ```
 
-### 8.2 Explanation Generation
+### 8.2 Explanation generation
 
 ```python
 @dataclass
@@ -889,9 +889,9 @@ class ExplainableExecutor:
 
 ---
 
-## 9. Testing Strategy
+## 9. Testing strategy
 
-### 9.1 Unit Tests
+### 9.1 Unit tests
 
 ```python
 def test_bracket_calculation():
@@ -916,7 +916,7 @@ def test_bracket_calculation():
     assert abs(result - expected_tax(50000)) < 0.01
 ```
 
-### 9.2 Property-Based Tests
+### 9.2 Property-based tests
 
 ```python
 from hypothesis import given, strategies as st
@@ -939,7 +939,7 @@ def test_marginal_rate_bounded(income):
     assert 0 <= marginal_rate <= 1
 ```
 
-### 9.3 Golden File Tests
+### 9.3 Golden file tests
 
 ```python
 def test_against_known_returns():
@@ -952,7 +952,7 @@ def test_against_known_returns():
                 f"Mismatch for {case['id']}: {var}"
 ```
 
-### 9.4 Cross-Target Consistency
+### 9.4 Cross-target consistency
 
 ```python
 def test_python_js_consistency():
@@ -969,44 +969,44 @@ def test_python_js_consistency():
 
 ---
 
-## 10. Migration Strategy
+## 10. Migration strategy
 
-### Phase 1: Core IR (Month 1-2)
+### Phase 1: Core IR (month 1-2)
 
 - [ ] Define IR data structures
 - [ ] Build Python formula parser
 - [ ] Implement type checker
 - [ ] Generate simple Python output
 
-### Phase 2: Entity Model (Month 2-3)
+### Phase 2: Entity model (month 2-3)
 
 - [ ] Define entity hierarchy spec
 - [ ] Implement aggregation/broadcast in IR
 - [ ] Generate entity-aware Python code
 - [ ] Port subset of PE-US variables
 
-### Phase 3: JavaScript Target (Month 3-4)
+### Phase 3: JavaScript target (month 3-4)
 
 - [ ] Implement JavaScript generator
 - [ ] Add TypeScript type declarations
 - [ ] Build browser test harness
 - [ ] Validate against Python output
 
-### Phase 4: Parameters (Month 4-5)
+### Phase 4: Parameters (month 4-5)
 
 - [ ] Define parameter spec format
 - [ ] Build parameter compiler
 - [ ] Support bracket scales
 - [ ] Handle time-varying values
 
-### Phase 5: Optimization (Month 5-6)
+### Phase 5: Optimization (month 5-6)
 
 - [ ] Dead code elimination
 - [ ] Constant folding
 - [ ] Common subexpression elimination
 - [ ] Benchmark against PE-Core
 
-### Phase 6: Production Ready (Month 6-8)
+### Phase 6: Production ready (month 6-8)
 
 - [ ] SQL generator
 - [ ] Spark generator
@@ -1015,11 +1015,11 @@ def test_python_js_consistency():
 
 ---
 
-## 11. Law Reference Semantics
+## 11. Law reference semantics
 
 A key differentiator: treating legal citations as first-class citizens, not just documentation URLs.
 
-### 11.1 Citation Model
+### 11.1 Citation model
 
 ```python
 @dataclass(frozen=True)
@@ -1081,7 +1081,7 @@ class LawVersion:
     bill: Optional[str]       # "H.R. 5376"
 ```
 
-### 11.2 Semantic Law Layer
+### 11.2 Semantic law layer
 
 Build a queryable knowledge base of the law:
 
@@ -1117,7 +1117,7 @@ class LawRegistry:
         ...
 ```
 
-### 11.3 Variable-to-Law Mapping
+### 11.3 Variable-to-law mapping
 
 ```python
 @variable(
@@ -1152,7 +1152,7 @@ def eitc(tax_unit, period):
     ...
 ```
 
-### 11.4 Impact Analysis
+### 11.4 Impact analysis
 
 When a law changes, understand the ripple effects:
 
@@ -1182,11 +1182,11 @@ class ImpactAnalyzer:
 
 ---
 
-## 12. Bi-Temporal Parameter Model
+## 12. Bi-temporal parameter model
 
 The "2024-vintage 2027 tax rate" problem: know what was legislated when.
 
-### 12.1 Temporal Dimensions
+### 12.1 Temporal dimensions
 
 Policy parameters have TWO time dimensions:
 
@@ -1246,7 +1246,7 @@ class BiTemporalParameter:
         return max(candidates, key=lambda v: v.effective_date).value
 ```
 
-### 12.2 Example: TCJA Sunset
+### 12.2 Example: TCJA sunset
 
 ```python
 # The Tax Cuts and Jobs Act (2017) set rates through 2025,
@@ -1297,7 +1297,7 @@ brackets.get(Date(2027, 1, 1), as_of=Date(2026, 1, 1))
 # -> Returns EXTENDED_BRACKETS (after hypothetical extension)
 ```
 
-### 12.3 Storage Strategy
+### 12.3 Storage strategy
 
 Git timestamps have a 1970 limit, but we can use other approaches:
 
@@ -1368,7 +1368,7 @@ class ParameterStore:
         ...
 ```
 
-### 12.4 Projections and Scenarios
+### 12.4 Projections and scenarios
 
 ```python
 class ParameterScenario:
@@ -1409,11 +1409,11 @@ impact = compare(baseline, reform)
 
 ---
 
-## 13. Jurisdiction Modularity
+## 13. Jurisdiction modularity
 
 Solve the "policyengine-us is too big" problem with proper jurisdiction separation.
 
-### 13.1 Jurisdiction Hierarchy
+### 13.1 Jurisdiction hierarchy
 
 ```python
 @dataclass(frozen=True)
@@ -1446,7 +1446,7 @@ class JurisdictionType(Enum):
     DISTRICT = "district"     # School districts, special districts
 ```
 
-### 13.2 Modular Repository Structure
+### 13.2 Modular repository structure
 
 Split into jurisdiction-specific packages:
 
@@ -1471,7 +1471,7 @@ cosilico-us-ca-sf/        # San Francisco (imports cosilico-us-ca)
 │   └── benefits/         # Local programs
 ```
 
-### 13.3 Bidirectional Jurisdiction Dependencies
+### 13.3 Bidirectional jurisdiction dependencies
 
 Jurisdiction dependencies flow BOTH directions:
 
@@ -1530,7 +1530,7 @@ class JurisdictionGraph:
 # 3. Approximation: Use prior-year state taxes (common in practice)
 ```
 
-### 13.4 Dependency Resolution
+### 13.4 Dependency resolution
 
 ```python
 class JurisdictionResolver:
@@ -1594,7 +1594,7 @@ class JurisdictionResolver:
             return LinearCalculationPlan(deps.topological_order)
 ```
 
-### 13.5 Composition Model
+### 13.5 Composition model
 
 ```python
 @dataclass
@@ -1628,7 +1628,7 @@ result = calculate(
 )
 ```
 
-### 13.6 Version Compatibility
+### 13.6 Version compatibility
 
 ```python
 # Each package declares compatible versions
@@ -1662,7 +1662,7 @@ class CompatibilityChecker:
         return issues
 ```
 
-### 13.7 Selective Compilation
+### 13.7 Selective compilation
 
 ```python
 class JurisdictionCompiler:
@@ -1708,7 +1708,7 @@ class JurisdictionCompiler:
         )
 ```
 
-### 13.8 State Package Template
+### 13.8 State package template
 
 Standardized structure for state packages:
 
@@ -1735,7 +1735,7 @@ cosilico-us-{state}/
 └── README.md
 ```
 
-### 13.9 Cross-Jurisdiction Analysis
+### 13.9 Cross-jurisdiction analysis
 
 ```python
 class MultiJurisdictionAnalyzer:
@@ -1790,7 +1790,7 @@ class MultiJurisdictionAnalyzer:
 
 ---
 
-## 14. Parameter Storage: Code vs Database
+## 14. Parameter storage: code vs database
 
 ### 14.1 Trade-offs
 
@@ -1805,7 +1805,7 @@ class MultiJurisdictionAnalyzer:
 | **Type Safety** | Schema validation | Constraints |
 | **Branching** | Git branches | Row versioning |
 
-### 14.2 Hybrid Approach
+### 14.2 Hybrid approach
 
 ```python
 class HybridParameterStore:
@@ -1843,7 +1843,7 @@ class HybridParameterStore:
         ...
 ```
 
-### 14.3 Recommended Approach
+### 14.3 Recommended approach
 
 For Cosilico:
 
@@ -1878,11 +1878,11 @@ values:
 
 ---
 
-## 15. Structured Law Layer
+## 15. Structured law layer
 
 Beyond encoding rules computationally, Cosilico aims to represent the law itself as structured data, enabling bidirectional translation between legal text and executable simulations.
 
-### 15.1 Architecture Overview
+### 15.1 Architecture overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1972,7 +1972,7 @@ Beyond encoding rules computationally, Cosilico aims to represent the law itself
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 15.2 Statute Data Model
+### 15.2 Statute data model
 
 ```python
 @dataclass
@@ -2046,7 +2046,7 @@ class Coverage(Enum):
     REFERENCED = "ref"      # Rule references but doesn't implement
 ```
 
-### 15.3 Bill Tracking Pipeline
+### 15.3 Bill tracking pipeline
 
 ```python
 class BillTracker:
@@ -2121,7 +2121,7 @@ class BillTracker:
         )
 ```
 
-### 15.4 Legislative Text Generation
+### 15.4 Legislative text generation
 
 ```python
 class LegislativeGenerator:
@@ -2229,7 +2229,7 @@ OpenStates is valuable infrastructure for bill tracking. Cosilico builds on this
 2. Connection to executable simulations
 3. Bidirectional translation (law ↔ code)
 
-### 15.6 Document Hierarchy
+### 15.6 Document hierarchy
 
 Legal authority flows from statutes through regulations to agency guidance. Each level can create policy:
 
@@ -2272,7 +2272,7 @@ Many policy details exist only in guidance, not in statute or regulation:
 - State handbooks interpret federal rules locally
 - Agency memos clarify ambiguous statutory language
 
-### 15.7 Data Sources
+### 15.7 Data sources
 
 | Source | Document Type | Content | Format | Update Frequency |
 |--------|---------------|---------|--------|------------------|
@@ -2290,7 +2290,7 @@ Many policy details exist only in guidance, not in statute or regulation:
 | **Cornell LII** | Aggregator | Free legal resources | HTML | Weekly |
 | **Westlaw/LexisNexis** | Annotator | Annotated statutes | Proprietary | N/A (cost) |
 
-### 15.7 Implementation Phases
+### 15.8 Implementation phases
 
 **Phase 1: Foundation (Months 1-6)**
 - Statute data model and storage
@@ -2314,7 +2314,7 @@ Many policy details exist only in guidance, not in statute or regulation:
 - Fiscal note automation
 - Amendment drafting assistance
 
-### 15.8 Risks and Mitigations
+### 15.9 Risks and mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
@@ -2326,9 +2326,9 @@ Many policy details exist only in guidance, not in statute or regulation:
 
 ---
 
-## 17. Microdata Calibration Layer
+## 17. Microdata calibration layer
 
-### Problem Statement
+### Problem statement
 
 Microsimulation requires representative population data. Survey microdata (CPS, ACS, SCF) must be **calibrated** to match known administrative totals. The challenge: calibration targets include both:
 
@@ -2356,7 +2356,7 @@ This creates a **bidirectional dependency** between the rules engine and microda
                  └─────────────┘
 ```
 
-### Calibration Target Types
+### Calibration target types
 
 ```python
 @dataclass(frozen=True)
@@ -2382,7 +2382,7 @@ class IntermediateCalibrationTarget(CalibrationTarget):
     # (actual_repayment - required_student_loan_repayment) for those who overpay
 ```
 
-### UK Voluntary Student Loan Repayment Example
+### UK voluntary student loan repayment example
 
 This is a concrete example of the intermediate calibration pattern:
 
@@ -2413,7 +2413,7 @@ class VoluntaryStudentLoanCalibration:
     )
 ```
 
-### Calibration Pipeline Architecture
+### Calibration pipeline architecture
 
 The calibration pipeline must handle these dependencies correctly:
 
@@ -2439,7 +2439,7 @@ Phase 3: Post-Calibration Validation
 └── Generate calibration quality report
 ```
 
-### Calibration Engine Interface
+### Calibration engine interface
 
 ```python
 class MicrodataCalibrator:
@@ -2501,7 +2501,7 @@ class MicrodataCalibrator:
         return microdata
 ```
 
-### Calibration Algorithm Options
+### Calibration algorithm options
 
 ```python
 class CalibrationMethod(Enum):
@@ -2522,7 +2522,7 @@ class CalibrationConfig:
     quantile_targets: Optional[Dict[str, List[float]]] = None  # Percentile targets
 ```
 
-### Integration with Rules Engine
+### Integration with rules engine
 
 The key architectural requirement is that the rules engine must support **batch calculation** efficiently for calibration:
 
@@ -2544,7 +2544,7 @@ class RulesEngine:
         return compiled.execute_batch(situations, period)
 ```
 
-### Calibration Targets Registry
+### Calibration targets registry
 
 ```yaml
 # calibration/targets/us_2024.yaml
@@ -2591,7 +2591,7 @@ targets:
     derivation: "max(0, actual_repayment - required_repayment)"
 ```
 
-### Performance Considerations
+### Performance considerations
 
 Calibration requires running the rules engine on the full microdata (potentially 100K+ records). Key optimizations:
 
@@ -2616,15 +2616,15 @@ class CalibrationPerformance:
 
 ---
 
-## 18. Business Model: Open Source Code, Paid Data Services
+## 18. Business model: open source code, paid data services
 
-### 18.1 Core Principle
+### 18.1 Core principle
 
 **100% of code is open source. Paid services are for data and compute.**
 
 Anyone can clone our repos and run everything themselves. We charge when they use our infrastructure.
 
-### 18.2 What's Open Source (Apache 2.0)
+### 18.2 What's open source (Apache 2.0)
 
 Everything in git is free forever:
 
@@ -2644,7 +2644,7 @@ Users can:
 - Host their own API
 - Use in commercial products without restriction
 
-### 18.3 What's Paid (Our Infrastructure)
+### 18.3 What's paid (our infrastructure)
 
 When users call `api.cosilico.ai`, they pay for:
 
@@ -2656,7 +2656,7 @@ When users call `api.cosilico.ai`, they pay for:
 | Large microsimulations | Compute | Census-scale processing |
 | Historical vintages | Storage | Years of versioned data |
 
-### 18.4 Pricing Tiers
+### 18.4 Pricing tiers
 
 ```yaml
 free:
@@ -2694,7 +2694,7 @@ enterprise:
   rate_limit: Unlimited
 ```
 
-### 18.5 The Value Proposition
+### 18.5 The value proposition
 
 "Yes, you *could* run this yourself. But do you want to?"
 
@@ -2720,7 +2720,7 @@ This model works well for:
 | Hugging Face | Transformers | Inference API |
 | Supabase | Supabase | Supabase Cloud |
 
-### 18.7 Why This Works for Cosilico
+### 18.7 Why this works for Cosilico
 
 1. **Mission alignment** - Core rules engine free means maximum policy impact
 2. **Moat is data** - Rules are easy to copy; calibrated microdata is not
@@ -2746,7 +2746,7 @@ This model works well for:
 
 ---
 
-## Appendix B: License Considerations
+## Appendix B: License considerations
 
 **Why Apache 2.0?**
 
@@ -2766,7 +2766,7 @@ To avoid any AGPL contamination:
 
 ---
 
-## Appendix C: Related Work
+## Appendix C: Related work
 
 - **OpenFisca** - Original policy-as-code framework
 - **PolicyEngine** - OpenFisca fork with improvements

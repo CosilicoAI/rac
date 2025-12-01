@@ -1,6 +1,6 @@
 # Cosilico DSL Specification
 
-## Executive Summary
+## Executive summary
 
 Cosilico uses a purpose-built domain-specific language for encoding tax and benefit rules. This is a deliberate choice over Python decorators (OpenFisca/PolicyEngine approach) for five strategic reasons:
 
@@ -14,9 +14,9 @@ This document specifies the language syntax, semantics, and tooling requirements
 
 ---
 
-## 1. Design Principles
+## 1. Design principles
 
-### 1.1 Safety Over Flexibility
+### 1.1 Safety over flexibility
 
 ```
 PRINCIPLE: Any .cosilico file can be executed without risk.
@@ -33,7 +33,7 @@ This enables:
 - AI agents writing rules without human review for safety (only correctness)
 - Third-party jurisdiction packages without security audits
 
-### 1.2 Compilation Over Interpretation
+### 1.2 Compilation over interpretation
 
 ```
 PRINCIPLE: Rules are compiled, not interpreted.
@@ -55,7 +55,7 @@ Benefits:
 - Target-specific optimizations (vectorization for Python, loops for JS)
 - Catch errors at compile time, not runtime
 
-### 1.3 Citations as Syntax
+### 1.3 Citations as syntax
 
 ```
 PRINCIPLE: Every rule traces to law.
@@ -81,7 +81,7 @@ This enables:
 - Impact analysis ("what breaks if § 32(b) changes?")
 - Audit trails ("why did this household get $3,200?")
 
-### 1.4 AI-Native Grammar
+### 1.4 AI-native grammar
 
 ```
 PRINCIPLE: Optimize for AI generation and review.
@@ -116,9 +116,9 @@ def income_tax(tax_unit, period):
 
 ---
 
-## 2. Language Specification
+## 2. Language specification
 
-### 2.1 File Structure
+### 2.1 File structure
 
 Files use `.cosilico` extension and follow this structure:
 
@@ -151,7 +151,7 @@ test "Single filer, $15k income" {
 }
 ```
 
-### 2.2 Variable Definitions
+### 2.2 Variable definitions
 
 ```cosilico
 variable <name> {
@@ -207,7 +207,7 @@ variable eitc {
 }
 ```
 
-### 2.3 Data Types
+### 2.3 Data types
 
 | Type | Description | Literal Syntax | Example |
 |------|-------------|----------------|---------|
@@ -269,7 +269,7 @@ match {
 }
 ```
 
-#### Clamping and Rounding
+#### Clamping and rounding
 ```cosilico
 min(a, b, ...)      # Minimum
 max(a, b, ...)      # Maximum
@@ -280,7 +280,7 @@ round(x)            # Round to nearest
 round(x, 2)         # Round to 2 decimal places
 ```
 
-### 2.5 Variable References
+### 2.5 Variable references
 
 ```cosilico
 # Same entity, same period
@@ -307,7 +307,7 @@ person.first(where: role == head).age      # Age of head of household
 spouse.employment_income                    # Spouse's income (if exists)
 ```
 
-### 2.6 Parameter References
+### 2.6 Parameter references
 
 ```cosilico
 # Simple parameter
@@ -323,7 +323,7 @@ brackets.threshold_at(index: 2)            # Get 3rd bracket threshold
 brackets.rate_at(income: 50000)            # Rate at $50k income
 ```
 
-### 2.7 Let Bindings
+### 2.7 Let bindings
 
 Local variable bindings for readability:
 
@@ -336,7 +336,7 @@ formula {
 }
 ```
 
-### 2.8 Entity Operations
+### 2.8 Entity operations
 
 #### Aggregation (child → parent)
 ```cosilico
@@ -355,7 +355,7 @@ tax_unit.filing_status    # Available on each person in the unit
 household.state_name      # Available on each person in the household
 ```
 
-### 2.9 Period Operations
+### 2.9 Period operations
 
 ```cosilico
 # Period arithmetic
@@ -374,7 +374,7 @@ variable(avg_income, period - 3 to period - 1)  # 3-year lookback average
 
 ---
 
-## 3. Built-in Functions
+## 3. Built-in functions
 
 ### 3.1 Mathematical
 ```cosilico
@@ -396,7 +396,7 @@ coalesce(a, b, ...)                  # First non-null value
 is_null(x)                           # Check for null/missing
 ```
 
-### 3.3 Bracket Scales
+### 3.3 Bracket scales
 ```cosilico
 scale.marginal_rate(amount)          # Calculate tax via marginal rates
 scale.average_rate(amount)           # Calculate average tax rate
@@ -405,7 +405,7 @@ scale.rate_at(amount)                # Get marginal rate for amount
 scale.tax_at(amount)                 # Get cumulative tax up to amount
 ```
 
-### 3.4 Date Functions
+### 3.4 Date functions
 ```cosilico
 age_in_years(birth_date, as_of)     # Calculate age
 days_between(date1, date2)           # Days between dates
@@ -415,9 +415,9 @@ month_of(date)                       # Extract month (1-12)
 
 ---
 
-## 4. Control Flow
+## 4. Control flow
 
-### 4.1 Conditional Expressions
+### 4.1 Conditional expressions
 
 ```cosilico
 # Simple if-else
@@ -439,7 +439,7 @@ match {
 }
 ```
 
-### 4.2 No Loops
+### 4.2 No loops
 
 The DSL intentionally has **no loops**. Iteration is handled through:
 - Entity aggregations (`person.sum(...)`)
@@ -453,9 +453,9 @@ This ensures:
 
 ---
 
-## 5. Modules and Imports
+## 5. Modules and imports
 
-### 5.1 Module Declaration
+### 5.1 Module declaration
 
 ```cosilico
 # Each file declares its module path
@@ -500,7 +500,7 @@ internal variable eitc_phase_in { ... }
 
 Tests live in **YAML files**, separate from rule definitions. This follows the OpenFisca/PolicyEngine pattern but with enhancements for Cosilico's needs.
 
-### 6.1 Why YAML for Tests?
+### 6.1 Why YAML for tests?
 
 | Aspect | YAML Tests | Inline DSL Tests |
 |--------|------------|------------------|
@@ -511,7 +511,7 @@ Tests live in **YAML files**, separate from rule definitions. This follows the O
 | **Bulk updates** | ✅ Script across files | ❌ Harder to batch |
 | **Version control** | ✅ Clear diffs | ✅ Clear diffs |
 
-### 6.2 Test File Structure
+### 6.2 Test file structure
 
 ```
 tests/
@@ -535,7 +535,7 @@ tests/
     └── full_household.yaml
 ```
 
-### 6.3 Basic Test Format
+### 6.3 Basic test format
 
 ```yaml
 # tests/us/federal/irs/credits/eitc.yaml
@@ -606,7 +606,7 @@ tests:
       eitc: 5764
 ```
 
-### 6.4 Shorthand Syntax
+### 6.4 Shorthand syntax
 
 For simple cases, use compact syntax:
 
@@ -634,7 +634,7 @@ tests:
 
 The test runner expands shorthand to full entity structure.
 
-### 6.5 Multi-Period Tests
+### 6.5 Multi-period tests
 
 ```yaml
 tests:
@@ -660,7 +660,7 @@ tests:
         income_tax: 28000  # Lower due to averaging
 ```
 
-### 6.6 Reform Tests
+### 6.6 Reform tests
 
 ```yaml
 tests:
@@ -694,7 +694,7 @@ tests:
       ctc: 2000  # Current law
 ```
 
-### 6.7 Tolerance and Error Margins
+### 6.7 Tolerance and error margins
 
 ```yaml
 tests:
@@ -726,7 +726,7 @@ tests:
       eitc: 0
 ```
 
-### 6.8 Test Categories and Tags
+### 6.8 Test categories and tags
 
 ```yaml
 metadata:
@@ -756,7 +756,7 @@ cosilico test --tag irs-official
 cosilico test --exclude-tag slow
 ```
 
-### 6.9 Property-Based Tests
+### 6.9 Property-based tests
 
 For invariants that should hold across all inputs:
 
@@ -809,7 +809,7 @@ cosilico test --properties
 cosilico test --properties --samples 10000  # More thorough
 ```
 
-### 6.10 Parameterized Tests
+### 6.10 Parameterized tests
 
 Generate tests from data:
 
@@ -846,7 +846,7 @@ tests:
       eitc: ${expected_eitc}
 ```
 
-### 6.11 Integration Tests
+### 6.11 Integration tests
 
 Full household scenarios testing multiple programs:
 
@@ -905,7 +905,7 @@ tests:
       household_net_income: 41692
 ```
 
-### 6.12 Running Tests
+### 6.12 Running tests
 
 ```bash
 # Run all tests
@@ -933,7 +933,7 @@ cosilico test --report html --output test-report.html
 cosilico test --update-expected
 ```
 
-### 6.13 Test Output
+### 6.13 Test output
 
 ```
 $ cosilico test tests/us/federal/irs/credits/eitc.yaml
@@ -965,7 +965,7 @@ Time: 0.089s
 Coverage: eitc (100%), eitc_phase_in (100%), eitc_phase_out (87%)
 ```
 
-### 6.14 Continuous Integration
+### 6.14 Continuous integration
 
 ```yaml
 # .github/workflows/test.yml
@@ -995,11 +995,11 @@ jobs:
 
 ---
 
-## 7. Parameters and Data Versioning
+## 7. Parameters and data versioning
 
 Cosilico implements **full bi-temporal versioning** across all inputs: parameters, indices, forecasts, and microdata. This enables complete reproducibility of any historical simulation.
 
-### 7.1 The Reproducibility Problem
+### 7.1 The reproducibility problem
 
 A simulation depends on many inputs that change over time:
 
@@ -1015,7 +1015,7 @@ A simulation depends on many inputs that change over time:
 
 To reproduce a simulation from June 2024, you need ALL inputs as they existed in June 2024.
 
-### 7.2 Bi-Temporal Model
+### 7.2 Bi-temporal model
 
 Every value has two time dimensions:
 
@@ -1041,7 +1041,7 @@ Every value has two time dimensions:
 └─────────────┴────────────┴────────────┴────────────┴────────────┘
 ```
 
-### 7.3 Parameter Tiers
+### 7.3 Parameter tiers
 
 Parameters have a precedence hierarchy:
 
@@ -1135,7 +1135,7 @@ gov.irs.income.brackets.single:
               assumption: "TCJA sunsets, reverts to pre-TCJA structure"
 ```
 
-### 7.4 Time-Varying Indexation Rules
+### 7.4 Time-varying indexation rules
 
 The inflation index used for indexation is itself a statutory parameter that changes over time.
 
@@ -1286,7 +1286,7 @@ cosilico compare reform.yaml --year 2027 \
   --scenario-b "tcja_extended"
 ```
 
-### 7.5 Unknown and Uncertain Parameter Values
+### 7.5 Unknown and uncertain parameter values
 
 Not all parameter values are known. The engine must explicitly represent gaps and uncertainty rather than silently interpolating or extrapolating.
 
@@ -1451,7 +1451,7 @@ gov.irs.eitc.max_amount
   Projection available: yes (chained_cpi, confidence: high)
 ```
 
-### 7.6 Economic Indices and Forecasts
+### 7.6 Economic indices and forecasts
 
 Indices separate actuals from forecasts, with forecast vintages tracked:
 
@@ -1526,7 +1526,7 @@ cpi_u:
           2026: 3.5
 ```
 
-### 7.7 Microdata Versioning
+### 7.7 Microdata versioning
 
 Microdata vintages capture the complete state of survey data:
 
@@ -1644,7 +1644,7 @@ reproducibility:
   random_seed: 42
 ```
 
-### 7.8 Simulation Manifests
+### 7.8 Simulation manifests
 
 Every simulation produces a manifest for complete reproducibility:
 
@@ -1717,7 +1717,7 @@ outputs:
   audit_log: results/audit.jsonl
 ```
 
-### 7.9 DSL Access to Versioned Data
+### 7.9 DSL access to versioned data
 
 ```cosilico
 # Default: latest knowledge date, uses precedence rules
@@ -1747,7 +1747,7 @@ let cpi = index(cpi_u, forecast_provider: cbo)
 let cpi_high = index(cpi_u, forecast_provider: custom.high_inflation)
 ```
 
-### 7.10 CLI Commands
+### 7.10 CLI commands
 
 ```bash
 # Run with current knowledge (default)
@@ -1787,7 +1787,7 @@ cosilico vintages --forecasts cbo
 cosilico vintages --parameters gov.irs.income.brackets
 ```
 
-### 7.11 Audit Trail
+### 7.11 Audit trail
 
 Every calculation includes full provenance:
 
@@ -1830,13 +1830,13 @@ Every calculation includes full provenance:
 }
 ```
 
-### 7.12 Document Archival
+### 7.12 Document archival
 
 Government sources disappear. Websites restructure, PDFs get removed, links rot. Every citation must be backed by an archived copy.
 
 > **Vision:** Inspired by [PolicyEngine/atlas](https://github.com/PolicyEngine/atlas) proposal - document archival and knowledge graphs should be first-class API features, not afterthoughts.
 
-#### Tiered Archival Strategy
+#### Tiered archival strategy
 
 Not all sources are equal. We prioritize based on computational law needs:
 
@@ -2253,7 +2253,7 @@ GET /api/v1/graph/snap
 }
 ```
 
-### 7.13 Directory Structure
+### 7.13 Directory structure
 
 ```
 cosilico/
@@ -2315,9 +2315,9 @@ cosilico/
 
 ---
 
-## 8. Error Handling
+## 8. Error handling
 
-### 8.1 Compile-Time Errors
+### 8.1 Compile-time errors
 
 The compiler catches:
 - **Type errors**: `Money + Bool` is invalid
@@ -2338,7 +2338,7 @@ error[E0001]: Type mismatch in formula
    = hint: did you mean to use a conditional? `if is_blind then ... else ...`
 ```
 
-### 8.2 Validation Warnings
+### 8.2 Validation warnings
 
 ```
 warning[W0001]: Missing unit specification
@@ -2358,9 +2358,9 @@ warning[W0002]: Test case may be outdated
 
 ---
 
-## 9. Tooling Requirements
+## 9. Tooling requirements
 
-### 9.1 Language Server Protocol (LSP)
+### 9.1 Language server protocol (LSP)
 
 Full LSP implementation providing:
 - **Completion**: Variables, parameters, keywords
@@ -2371,7 +2371,7 @@ Full LSP implementation providing:
 - **Formatting**: Consistent code style
 - **Rename**: Safe refactoring
 
-### 9.2 Syntax Highlighting
+### 9.2 Syntax highlighting
 
 Tree-sitter grammar for:
 - VS Code extension
@@ -2379,7 +2379,7 @@ Tree-sitter grammar for:
 - GitHub rendering
 - Web-based editors
 
-### 9.3 CLI Tools
+### 9.3 CLI tools
 
 ```bash
 # Compile and validate
@@ -2406,7 +2406,7 @@ cosilico refs "26 USC § 32"
 cosilico diff v2023.1 v2024.1 --variables eitc
 ```
 
-### 9.4 Web Playground
+### 9.4 Web playground
 
 Interactive browser-based environment:
 - Edit DSL code
@@ -2417,7 +2417,7 @@ Interactive browser-based environment:
 
 ---
 
-## 10. Migration Path
+## 10. Migration path
 
 ### 10.1 From Python (PolicyEngine/OpenFisca)
 
@@ -2437,7 +2437,7 @@ The migrator handles:
 - Citation extraction from docstrings
 - Test case generation from existing tests
 
-### 10.2 Gradual Adoption
+### 10.2 Gradual adoption
 
 Support mixed codebases during transition:
 
@@ -2454,7 +2454,7 @@ foreign us.legacy.complex_calculation {
 
 ---
 
-## 11. Example: Complete EITC Implementation
+## 11. Example: complete EITC implementation
 
 ```cosilico
 # rules/us/federal/irs/credits/eitc.cosilico
@@ -2624,9 +2624,9 @@ properties:
 
 ---
 
-## 12. Future Extensions
+## 12. Future extensions
 
-### 12.1 Literate Programming Mode
+### 12.1 Literate programming mode
 
 For law-adjacent documentation:
 
@@ -2658,7 +2658,7 @@ variable eitc {
 The phase-out is defined in subsection (a)(2)...
 ```
 
-### 12.2 Formal Verification
+### 12.2 Formal verification
 
 Integration with proof assistants:
 
@@ -2669,7 +2669,7 @@ Integration with proof assistants:
 @verify equivalent(eitc, eitc_alternative_formula)
 ```
 
-### 12.3 Probabilistic Extensions
+### 12.3 Probabilistic extensions
 
 For uncertainty quantification:
 
@@ -2730,7 +2730,7 @@ expression =
 
 ---
 
-## Appendix B: Comparison with Alternatives
+## Appendix B: Comparison with alternatives
 
 | Feature | Cosilico DSL | Python Decorators | Catala | DMN/FEEL |
 |---------|--------------|-------------------|--------|----------|
@@ -2746,9 +2746,9 @@ expression =
 
 ---
 
-## Appendix C: Implementation Roadmap
+## Appendix C: Implementation roadmap
 
-### Phase 1: Core Language (Q1)
+### Phase 1: Core language (Q1)
 - [ ] Grammar specification (EBNF)
 - [ ] Tree-sitter parser
 - [ ] Type system implementation
@@ -2761,12 +2761,12 @@ expression =
 - [ ] Test runner
 - [ ] Migration tool from Python
 
-### Phase 3: Additional Targets (Q3)
+### Phase 3: Additional targets (Q3)
 - [ ] JavaScript generator
 - [ ] SQL generator
 - [ ] WASM generator (via Rust)
 
-### Phase 4: Advanced Features (Q4)
+### Phase 4: Advanced features (Q4)
 - [ ] Literate programming mode
 - [ ] Formal verification integration
 - [ ] Web playground
