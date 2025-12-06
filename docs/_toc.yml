@@ -33,6 +33,8 @@ parts:
   - caption: AI Rules Engine
     chapters:
       - file: ai-encoding/overview
+      - file: ai-encoding/training-loop
+        title: Training Loop Spec
       - file: ai-encoding/reward-functions
       - file: ai-encoding/oracle-stack
       - file: ai-encoding/curriculum

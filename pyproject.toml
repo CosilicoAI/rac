@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cosilico"
+version = "0.1.0"
+description = "AI rules engine for tax and benefit law"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Cosilico", email = "hello@cosilico.ai" }
+]
+keywords = ["tax", "benefits", "policy", "ai", "rules-engine"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+llm = [
+    "anthropic>=0.25.0",
+]
+oracle = [
+    "policyengine-us>=1.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+all = [
+    "cosilico[llm,oracle,dev]",
+]
+
+[project.scripts]
+cosilico-demo = "cosilico.demo:main"
+
+[project.urls]
+Homepage = "https://cosilico.ai"
+Documentation = "https://docs.cosilico.ai"
+Repository = "https://github.com/CosilicoAI/cosilico-engine"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cosilico"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
