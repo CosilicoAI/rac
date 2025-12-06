@@ -275,6 +275,8 @@ PAID
 
 5. **AI-Native Design** - Built for function calling, structured outputs, citations. Not retrofitted.
 
+6. **AI Encoding Infrastructure** - PolicyEngine + TAXSIM serve as verification oracles for AI agents that learn to encode rules from statute. This is TDD at scale: generate unlimited test cases from oracles, let AI iterate until passing. The training data factory is the moat, not the encoded rules. See [AI_ENCODING.md](./AI_ENCODING.md).
+
 ---
 
 ## Team
@@ -426,3 +428,53 @@ API infrastructure companies command premium valuations (15-20x ARR) due to high
 | "Single founder risk" | Actively hiring co-founders. 50+ OSS contributors as extended team. |
 
 Cosilico is infrastructure for the next layer: policy calculations, predictions, and simulation.
+
+---
+
+## Appendix B: Flagship Apps
+
+Cosilico invests in (but doesn't operate) open source applications that demonstrate platform value. These are separate entities with independent teams, using Cosilico APIs like any other customer.
+
+### FinSim — Personal Financial Planning
+
+**Thesis:** Consumer financial planning apps are stuck in the 1990s. Maxifi (ESPlanner successor) charges $109-199/year for lifetime consumption smoothing, but runs on legacy architecture and offers no API. Mint died. The market is ripe for a modern, open source alternative.
+
+**What it does:**
+- Lifetime tax projections with consumption smoothing
+- Social Security optimization (when to claim)
+- Tax-efficient withdrawal strategies (Roth conversion ladders, etc.)
+- Scenario comparison (move states, change jobs, have kids)
+
+**Why it matters for Cosilico:**
+- Proves the Rules API works for real financial planning at consumer scale
+- Demonstrates accuracy vs. established competitors (Maxifi)
+- Generates revenue as a Cosilico customer (API fees)
+- Creates case study: "FinSim built a $X business on our API"
+
+**Competitive landscape:**
+
+| App | Pricing | Tech | API |
+|-----|---------|------|-----|
+| Maxifi (ESPlanner) | $109-199/yr | Legacy desktop-era | None |
+| NewRetirement | $120-250/yr | Web, closed source | None |
+| Boldin | $120/yr | Web, closed source | None |
+| **FinSim** | Freemium | Modern web, open source | Cosilico |
+
+**Relationship to Cosilico:** Portfolio investment. Max advises, separate team operates. Uses Cosilico APIs at standard pricing.
+
+### HiveSight — LLM Perspective Simulation
+
+**Thesis:** Pollsters, researchers, and product teams need to understand how different demographics think. Traditional surveys are slow and expensive. LLMs can simulate perspectives, but only if grounded in accurate demographic data.
+
+**What it does:**
+- "How would a median-income family in Ohio view this policy?"
+- Synthetic focus groups with demographically-realistic participants
+- Survey simulation at 1000x the speed and 1/100th the cost
+- Grounded in actual population distributions, not LLM stereotypes
+
+**Why it matters for Cosilico:**
+- Proves the Data API (enhanced microdata) has value beyond tax calculations
+- Opens entirely new market (research, polling, product testing)
+- Demonstrates Cosilico's mission: "simulate society"
+
+**Relationship to Cosilico:** Portfolio investment. Uses Cosilico's enhanced microdata API.

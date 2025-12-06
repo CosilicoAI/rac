@@ -1,0 +1,28 @@
+# Book settings
+title: Cosilico Engine Documentation
+author: Cosilico
+copyright: "2024"
+
+# Build settings
+execute:
+  execute_notebooks: "off"
+
+# HTML settings
+html:
+  use_repository_button: true
+  use_issues_button: true
+  use_edit_page_button: true
+  home_page_in_navbar: false
+  baseurl: https://docs.cosilico.ai
+
+# Repository settings
+repository:
+  url: https://github.com/PolicyEngine/cosilico-engine
+  path_to_book: docs
+  branch: main
+
+# Sphinx settings
+sphinx:
+  config:
+    html_theme_options:
+      navigation_with_keys: false
