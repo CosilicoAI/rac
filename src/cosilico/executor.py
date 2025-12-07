@@ -7,7 +7,7 @@ from .types import ExecutionResult, GeneratedCode, TestCase
 
 
 class Executor:
-    """Executes generated Cosilico DSL code against test cases."""
+    """Executes generated code against test cases."""
 
     def execute(
         self,
@@ -16,11 +16,16 @@ class Executor:
     ) -> list[ExecutionResult]:
         """Execute code against test cases.
 
-        For v1, we parse the DSL and interpret it directly.
-        Future versions will compile to Python/WASM.
+        Supports both Python functions and Cosilico DSL.
         """
-        # Parse the DSL
-        parsed = self._parse(code.source)
+        source = code.source.strip()
+
+        # Check if this is Python code (has def calculate)
+        if "def calculate" in source:
+            return self._execute_python(source, test_cases)
+
+        # Otherwise treat as DSL
+        parsed = self._parse(source)
         if parsed.get("error"):
             return [
                 ExecutionResult(
@@ -30,11 +35,63 @@ class Executor:
                 for tc in test_cases
             ]
 
-        # Execute each test case
         results = []
         for tc in test_cases:
             result = self._execute_case(parsed, tc)
             results.append(result)
+
+        return results
+
+    def _execute_python(
+        self,
+        source: str,
+        test_cases: list[TestCase],
+    ) -> list[ExecutionResult]:
+        """Execute Python code against test cases."""
+        # Extract just the function definition
+        # Find the code block if wrapped in markdown
+        if "```python" in source:
+            start = source.find("```python") + 9
+            end = source.find("```", start)
+            source = source[start:end].strip()
+        elif "```" in source:
+            start = source.find("```") + 3
+            end = source.find("```", start)
+            source = source[start:end].strip()
+
+        # Compile the function
+        try:
+            exec_globals = {"__builtins__": __builtins__}
+            exec(source, exec_globals)
+            calculate_fn = exec_globals.get("calculate")
+            if not calculate_fn:
+                return [
+                    ExecutionResult(case_id=tc.id, error="No 'calculate' function found")
+                    for tc in test_cases
+                ]
+        except Exception as e:
+            return [
+                ExecutionResult(case_id=tc.id, error=f"Compile error: {e}")
+                for tc in test_cases
+            ]
+
+        # Execute each test case
+        results = []
+        for tc in test_cases:
+            try:
+                output = calculate_fn(tc.inputs)
+                match = self._compare_outputs(output, tc.expected, tolerance=1.0)
+                results.append(ExecutionResult(
+                    case_id=tc.id,
+                    output=output,
+                    expected=tc.expected,
+                    match=match,
+                ))
+            except Exception as e:
+                results.append(ExecutionResult(
+                    case_id=tc.id,
+                    error=f"Runtime error: {e}",
+                ))
 
         return results
 
@@ -125,6 +182,28 @@ class Executor:
 
             # Add mock parameter values (these would come from param store in production)
             context["param"] = self._get_mock_params()
+
+            # Add standard deduction values
+            context["standard_deduction_amounts"] = {
+                "SINGLE": 14600,
+                "JOINT": 29200,
+                "MARRIED_FILING_SEPARATELY": 14600,
+                "HEAD_OF_HOUSEHOLD": 21900,
+            }
+
+            # Add SALT cap values
+            context["salt_cap_amounts"] = {
+                "SINGLE": 10000,
+                "JOINT": 10000,
+                "MARRIED_FILING_SEPARATELY": 5000,
+                "HEAD_OF_HOUSEHOLD": 10000,
+            }
+
+            # Add saver's credit parameters
+            context["savers_credit_params"] = {
+                "thresholds": [46000, 50000, 76500],
+                "rates": [0.50, 0.20, 0.10, 0.00],
+            }
 
             # Evaluate formula
             output_value = self._evaluate_formula(formula, context, parsed.get("references", {}))
@@ -222,14 +301,50 @@ class Executor:
             else:
                 expr = expr.replace(alias, str(value))
 
+        # Handle if-then-else expressions (convert to Python ternary)
+        expr = self._convert_conditionals(expr)
+
         # Evaluate the expression
         # SECURITY NOTE: In production, use a proper expression parser, not eval
         # This is only for prototype/testing
         try:
-            result = eval(expr, {"__builtins__": {"min": min, "max": max}}, context)
+            # Add string comparison support
+            safe_builtins = {"min": min, "max": max, "abs": abs}
+            result = eval(expr, {"__builtins__": safe_builtins}, context)
             return float(result)
         except Exception as e:
             raise ValueError(f"Failed to evaluate '{expr}': {e}")
+
+    def _convert_conditionals(self, expr: str) -> str:
+        """Convert DSL if-then-else to Python ternary expressions."""
+        # Pattern: if <cond> then <true_val> else <false_val>
+        # Convert to: (<true_val> if <cond> else <false_val>)
+
+        # Handle nested if-then-else by working from innermost out
+        max_iterations = 10
+        for _ in range(max_iterations):
+            # Find innermost if-then-else (one without nested if in its branches)
+            match = re.search(
+                r'\bif\s+(.+?)\s+then\s+([^if]+?)\s+else\s+([^if]+?)(?=\s*$|\s*\))',
+                expr,
+                re.IGNORECASE
+            )
+            if not match:
+                # Try simpler pattern for remaining cases
+                match = re.search(
+                    r'\bif\s+(.+?)\s+then\s+(.+?)\s+else\s+(.+)',
+                    expr,
+                    re.IGNORECASE
+                )
+            if not match:
+                break
+
+            cond, true_val, false_val = match.groups()
+            # Convert to Python ternary
+            python_expr = f"({true_val.strip()} if {cond.strip()} else {false_val.strip()})"
+            expr = expr[:match.start()] + python_expr + expr[match.end():]
+
+        return expr
 
     def _expand_functions(
         self,

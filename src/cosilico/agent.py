@@ -101,6 +101,12 @@ class AgentTrainingLoop:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
+        # Trajectory logging - captures the full RL loop
+        self.trajectory: list[dict] = []
+
+        # Full conversation log for visualization
+        self.conversation_log: list[dict] = []
+
     def get_cost_estimate(self) -> dict:
         """Estimate API cost based on token usage.
 
@@ -130,67 +136,64 @@ class AgentTrainingLoop:
         }
 
     def _build_system_prompt(self) -> str:
-        return """You are an expert tax law encoder. Your task is to convert statutory text into executable Cosilico DSL code.
+        return """You are an expert tax law encoder. Your task is to convert statutory text into executable Python code.
 
-## Cosilico DSL Syntax
+## Output Format
 
-```
-variable <name>:
-  entity: TaxUnit | Person | Household
-  period: Year | Month
-  dtype: Money | Rate | Boolean | Integer
-  label: "Description"
-  citation: "Legal citation"
+Generate a Python function that takes a dictionary of inputs and returns a dictionary with the calculated value.
 
-  references:
-    <alias>: <path>  # Variable or parameter reference
+```python
+def calculate(inputs: dict) -> dict:
+    # Extract inputs
+    earned_income = inputs.get("earned_income", 0)
+    n_children = inputs.get("n_qualifying_children", inputs.get("n_children", 0))
+    filing_status = inputs.get("filing_status", "SINGLE")
 
-  formula:
-    <expression>
-```
+    # Parameters (hardcode from statute/IRS tables)
+    # ...
 
-## Formula Syntax
-- Arithmetic: +, -, *, /
-- Comparison: ==, !=, <, <=, >, >=
-- Logic: and, or, not
-- Conditionals: if <cond> then <expr> else <expr>
-- Functions: min(a, b), max(a, b), clip(x, lo, hi)
-- Array indexing: param[index_variable]
+    # Calculate
+    result = ...
 
-## Example
-
-```cosilico
-variable eitc_phase_in_credit:
-  entity: TaxUnit
-  period: Year
-  dtype: Money
-  label: "EITC phase-in credit"
-  citation: "26 USC § 32(a)(1)"
-
-  references:
-    earned_income: us/irs/income/earned_income
-    n_qualifying_children: us/irs/eitc/n_qualifying_children
-    phase_in_rate: param.irs.eitc.phase_in_rate
-    earned_income_amount: param.irs.eitc.earned_income_amount
-
-  formula:
-    min(earned_income, earned_income_amount[n_qualifying_children]) * phase_in_rate[n_qualifying_children]
+    return {"variable_name": result}
 ```
 
-## Parameters Available
+## Important Rules
 
-For EITC (2024 values):
-- param.irs.eitc.phase_in_rate: {0: 0.0765, 1: 0.34, 2: 0.40, 3: 0.45}
-- param.irs.eitc.earned_income_amount: {0: 7840, 1: 11750, 2: 16510, 3: 16510}
-- param.irs.eitc.max_credit: {0: 600, 1: 3995, 2: 6604, 3: 7430}
+1. Always return a dict with a single key matching the expected output variable
+2. Use inputs.get() with defaults to safely access input values
+3. Hardcode parameter values from the statute (rates, thresholds, etc.)
+4. Handle all filing statuses if relevant: "SINGLE", "JOINT", "MARRIED_FILING_SEPARATELY", "HEAD_OF_HOUSEHOLD"
+5. Use standard Python: min(), max(), if/else, etc.
+
+## Example - EITC Phase-In
+
+```python
+def calculate(inputs: dict) -> dict:
+    earned_income = inputs.get("earned_income", 0)
+    n_children = inputs.get("n_qualifying_children", inputs.get("n_children", 0))
+
+    # 2024 parameters by number of qualifying children
+    params = {
+        0: {"rate": 0.0765, "earned_income_amount": 7840},
+        1: {"rate": 0.34, "earned_income_amount": 11750},
+        2: {"rate": 0.40, "earned_income_amount": 16510},
+        3: {"rate": 0.45, "earned_income_amount": 16510},
+    }
+
+    p = params.get(min(n_children, 3))
+    credit = min(earned_income, p["earned_income_amount"]) * p["rate"]
+
+    return {"eitc_phase_in_credit": credit}
+```
 
 ## Your Task
 
 1. Read the statutory text carefully
-2. Generate DSL code that implements the rules
-3. Use the execute_dsl tool to test your code
+2. Generate Python code that implements the rules
+3. Use the execute_dsl tool to test your code (it accepts Python)
 4. Analyze failures and iterate
-5. When you reach 95%+ accuracy (or have exhausted options), use submit_final_code
+5. When you reach 95%+ accuracy, use submit_final_code
 
 Be precise with the formula - small errors in rates or thresholds cause test failures."""
 
@@ -284,6 +287,27 @@ Start by generating your initial DSL code and testing it."""
             ]
             response["suggestion"] = "Analyze the failures and adjust your formula or parameters."
 
+        # Log to trajectory for RL analysis
+        self.trajectory.append({
+            "iteration": self.iteration,
+            "code": dsl_code,
+            "accuracy": score.accuracy,
+            "passed": int(score.accuracy * score.n_cases),
+            "total": score.n_cases,
+            "mean_absolute_error": score.mean_absolute_error,
+            "failures": [
+                {
+                    "type": f.type,
+                    "message": f.message,
+                    "expected": f.expected,
+                    "actual": f.actual,
+                    "inputs": f.inputs if hasattr(f, 'inputs') else None
+                }
+                for f in failures
+            ],
+            "is_best": score.accuracy >= self.best_accuracy,
+        })
+
         return json.dumps(response, indent=2)
 
     def _submit_final(self, dsl_code: str, explanation: str) -> str:
@@ -319,6 +343,8 @@ Start by generating your initial DSL code and testing it."""
         self.iteration = 0
         self.best_code = None
         self.best_accuracy = 0.0
+        self.trajectory = []  # Reset trajectory for new training run
+        self.conversation_log = []  # Reset conversation log
 
         # Initialize conversation
         messages = [
@@ -351,6 +377,19 @@ Start by generating your initial DSL code and testing it."""
             assistant_content = response.content
             messages.append({"role": "assistant", "content": assistant_content})
 
+            # Log assistant response for visualization
+            assistant_text = ""
+            for block in assistant_content:
+                if hasattr(block, "text"):
+                    assistant_text += block.text
+            self.conversation_log.append({
+                "turn": turn,
+                "role": "assistant",
+                "text": assistant_text,
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            })
+
             # Check for tool use
             tool_uses = [block for block in assistant_content if block.type == "tool_use"]
 
@@ -369,6 +408,15 @@ Start by generating your initial DSL code and testing it."""
                     print(f"\n[Tool: {tool_use.name}]")
 
                 result = self._handle_tool_call(tool_use.name, tool_use.input)
+
+                # Log tool call for visualization
+                self.conversation_log.append({
+                    "turn": turn,
+                    "role": "tool_call",
+                    "tool_name": tool_use.name,
+                    "tool_input": tool_use.input,
+                    "tool_result": result,
+                })
 
                 if verbose:
                     # Parse and display key info
@@ -418,7 +466,9 @@ Start by generating your initial DSL code and testing it."""
                 "final_accuracy": self.best_accuracy,
                 "iterations": self.iteration,
                 "submitted": True,
-                "cost": cost
+                "cost": cost,
+                "trajectory": self.trajectory,  # Full RL learning history
+                "conversation": self.conversation_log,  # Full conversation for visualization
             }
         else:
             return {
@@ -427,7 +477,9 @@ Start by generating your initial DSL code and testing it."""
                 "final_accuracy": self.best_accuracy,
                 "iterations": self.iteration,
                 "submitted": False,
-                "cost": cost
+                "cost": cost,
+                "trajectory": self.trajectory,  # Full RL learning history
+                "conversation": self.conversation_log,  # Full conversation for visualization
             }
 
 
