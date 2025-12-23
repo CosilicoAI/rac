@@ -1,0 +1,41 @@
+# 26 USC §63 - Standard Deduction
+#
+# "For purposes of this subtitle, the term 'standard deduction' means the
+# sum of—
+# (1) the basic standard deduction, and
+# (2) the additional standard deduction."
+#
+# The basic standard deduction varies by filing status per §63(c)(2).
+
+module statute.26.63
+version "2024.1"
+
+references {
+  # Filing status from §1
+  filing_status: statute/26/1/filing_status
+
+  # Parameters from §63(c)
+  basic_standard_deduction: statute/26/63/c/amounts
+}
+
+variable standard_deduction {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "Standard Deduction"
+  description "Basic standard deduction amount based on filing status per 26 USC §63(c)"
+
+  formula {
+    # Basic standard deduction varies by filing status per §63(c)(2)
+    return match filing_status {
+      case SINGLE => @param.basic_standard_deduction.single
+      case JOINT => @param.basic_standard_deduction.joint
+      case SEPARATE => @param.basic_standard_deduction.separate
+      case HEAD_OF_HOUSEHOLD => @param.basic_standard_deduction.head_of_household
+      else => @param.basic_standard_deduction.single
+    }
+  }
+
+  default 0
+}

@@ -1,0 +1,46 @@
+# 26 USC §63(c)(2) - Basic Standard Deduction Amounts
+#
+# "The basic standard deduction is—
+# (A) 200 percent of the dollar amount in effect under subparagraph (C) for
+#     the taxable year in the case of—
+#     (i) a joint return, or
+#     (ii) a surviving spouse (as defined in section 2(a)),
+# (B) $4,400 in the case of a head of household (as defined in section 2(b))
+# (C) $3,000 in the case of—
+#     (i) an individual who is not married and who is not a surviving spouse
+#         or head of household, or
+#     (ii) a married individual filing a separate return."
+#
+# Note: Base amounts from 1988 are inflation-adjusted annually per §63(c)(4)
+
+basic_standard_deduction:
+  description: Basic standard deduction amount by filing status
+  unit: USD
+  reference: "26 USC § 63(c)(2)"
+  indexed_by: [filing_status]
+  inflation_adjustment: "§63(c)(4)"
+
+  values:
+    - effective_from: 2024-01-01
+      source: "Rev. Proc. 2023-34, Section 3.01"
+      by_filing_status:
+        single: 14600
+        joint: 29200
+        separate: 14600
+        head_of_household: 21900
+
+    - effective_from: 2023-01-01
+      source: "Rev. Proc. 2022-38, Section 3.01"
+      by_filing_status:
+        single: 13850
+        joint: 27700
+        separate: 13850
+        head_of_household: 20800
+
+    - effective_from: 2022-01-01
+      source: "Rev. Proc. 2021-45, Section 3.01"
+      by_filing_status:
+        single: 12950
+        joint: 25900
+        separate: 12950
+        head_of_household: 19400

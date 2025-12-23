@@ -1,0 +1,55 @@
+# 26 USC §62 - Adjusted Gross Income Defined
+#
+# "(a) General Rule.—For purposes of this subtitle, the term 'adjusted
+# gross income' means, in the case of an individual, gross income minus
+# the deductions specified in subsection (a)."
+#
+# Simplified implementation: AGI = sum of income sources
+# Full implementation would subtract above-the-line deductions per §62(a)(1)-(21)
+
+module statute.26.62.a
+version "2024.1"
+
+references {
+  # Gross income components from §61
+  wages: statute/26/61/a/1/wages
+  salaries: statute/26/61/a/1/salaries
+  tips: statute/26/61/a/1/tips
+
+  # Self-employment income
+  self_employment_income: statute/26/1402/a/net_earnings_self_employment
+
+  # Investment income
+  interest_income: statute/26/61/a/4/interest
+  dividend_income: statute/26/61/a/7/dividends
+  capital_gains: statute/26/61/a/3/gains_from_property
+
+  # Other income
+  other_income: statute/26/61/a/other_income
+}
+
+variable adjusted_gross_income {
+  entity TaxUnit
+  period Year
+  dtype Money
+  unit "USD"
+  label "Adjusted Gross Income"
+  description "Gross income minus above-the-line deductions per 26 USC §62(a)"
+  reference "26 USC 62"
+
+  formula {
+    # Simplified: Sum of income sources
+    # Full implementation would subtract §62(a) deductions:
+    # - Trade/business deductions (§62(a)(1))
+    # - Educator expenses (§62(a)(2)(D))
+    # - Health savings account deduction (§62(a)(16))
+    # - Self-employment tax deduction (§62(a)(4))
+    # - Student loan interest (§62(a)(17))
+    # - etc.
+
+    let employee_income = wages + salaries + tips
+    let investment_income = interest_income + dividend_income + capital_gains
+
+    return employee_income + self_employment_income + investment_income + other_income
+  }
+}
