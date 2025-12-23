@@ -116,12 +116,13 @@ def construct_tax_units(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.nd
                 tax_unit_filing_status[i] = "SINGLE"
         else:
             # No married couple - each adult is own tax unit
-            # Assign children to oldest adult
-            oldest_idx = adult_idx[np.argmax(hh_ages[adult_mask])]
+            # Assign children to adult with highest earned income (most likely to claim)
+            adult_earned = [earned[i] for i in adult_idx]
+            primary_earner_idx = adult_idx[np.argmax(adult_earned)]
             for i in adult_idx:
                 is_primary_filer[i] = True
                 tax_unit_earned_income[i] = earned[i]
-                if i == oldest_idx:
+                if i == primary_earner_idx:
                     tax_unit_n_children[i] = min(n_children_in_hh, 3)
                 else:
                     tax_unit_n_children[i] = 0

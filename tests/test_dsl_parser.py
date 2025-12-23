@@ -500,6 +500,64 @@ variable credit {
         assert binding.value.path == "credit_rate"
         assert binding.value.index == "n_children"
 
+    def test_formula_with_if_statement_early_return(self):
+        """Parse formula with if statement and early return.
+
+        This pattern is common in statute encodings:
+        - Check eligibility condition
+        - Return 0 if not eligible
+        - Otherwise compute and return the value
+
+        This is different from if-then-else expressions.
+        """
+        code = """
+variable credit {
+  entity TaxUnit
+  period Year
+  dtype Money
+
+  formula {
+    if not is_eligible then
+      return 0
+
+    return max(0, amount - reduction)
+  }
+}
+"""
+        module = parse_dsl(code)
+        var = module.variables[0]
+        # Formula should have an if statement with early return
+        # and a final return expression
+        assert var.formula is not None
+        assert var.formula.return_expr is not None
+
+    def test_formula_with_multiple_if_guards(self):
+        """Parse formula with multiple if guard statements.
+
+        Pattern for checking multiple conditions before main computation.
+        """
+        code = """
+variable benefit {
+  entity TaxUnit
+  period Year
+  dtype Money
+
+  formula {
+    if income > income_limit then
+      return 0
+
+    if age < 18 then
+      return 0
+
+    return base_amount * phase_in_rate
+  }
+}
+"""
+        module = parse_dsl(code)
+        var = module.variables[0]
+        assert var.formula is not None
+        assert var.formula.return_expr is not None
+
 
 class TestParserReferences:
     """Tests for parsing references blocks."""

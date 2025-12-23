@@ -742,11 +742,22 @@ class Parser:
 
     def _parse_formula_block(self) -> FormulaBlock:
         bindings = []
+        guards = []  # List of (condition, return_value) tuples for if-guards
         return_expr = None
 
         while not self._check(TokenType.RBRACE) and not self._is_at_end():
             if self._check(TokenType.LET):
                 bindings.append(self._parse_let_binding())
+            elif self._check(TokenType.IF):
+                # Check if this is an if-guard statement (if ... then return ...)
+                # or an if-expression (if ... then expr else expr)
+                guard = self._try_parse_if_guard()
+                if guard:
+                    guards.append(guard)
+                else:
+                    # It's an if-expression, parse as return expression
+                    return_expr = self._parse_expression()
+                    break
             elif self._check(TokenType.RETURN):
                 self._advance()
                 return_expr = self._parse_expression()
@@ -756,7 +767,47 @@ class Parser:
                 return_expr = self._parse_expression()
                 break
 
+        # Build nested if-else from guards and final return
+        if guards and return_expr:
+            # Transform guards into nested if-else expression
+            # guards = [(cond1, val1), (cond2, val2)]
+            # return_expr = final_val
+            # Result: if cond1 then val1 else if cond2 then val2 else final_val
+            result = return_expr
+            for condition, guard_value in reversed(guards):
+                result = IfExpr(condition=condition, then_branch=guard_value, else_branch=result)
+            return_expr = result
+
         return FormulaBlock(bindings=bindings, return_expr=return_expr)
+
+    def _try_parse_if_guard(self) -> tuple | None:
+        """Try to parse an if-guard statement: if <cond> then return <expr>
+
+        Returns (condition, return_value) tuple if successful, None if this is
+        a regular if-expression that should be parsed differently.
+        """
+        # Save position to backtrack if this isn't a guard
+        saved_pos = self.pos
+
+        self._advance()  # consume 'if'
+        condition = self._parse_expression()
+
+        if not self._check(TokenType.THEN):
+            # Not a valid if, backtrack
+            self.pos = saved_pos
+            return None
+
+        self._advance()  # consume 'then'
+
+        # Check if next token is 'return' - that makes this a guard
+        if self._check(TokenType.RETURN):
+            self._advance()  # consume 'return'
+            return_value = self._parse_expression()
+            return (condition, return_value)
+
+        # Not a guard, backtrack and let caller parse as expression
+        self.pos = saved_pos
+        return None
 
     def _parse_let_binding(self) -> LetBinding:
         self._consume(TokenType.LET, "Expected 'let'")

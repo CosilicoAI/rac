@@ -20,24 +20,36 @@ except ImportError:
 
 
 class TestAGIParsing:
-    """Test that AGI DSL file parses correctly."""
+    """Test that AGI DSL file parses correctly.
 
-    def test_agi_file_parses(self):
-        """AGI cosilico file parses without errors."""
+    NOTE: Statute files live in cosilico-us, NOT cosilico-engine.
+    These tests skip if the file isn't found.
+    """
+
+    @pytest.fixture
+    def agi_path(self):
+        """Get path to AGI file in cosilico-us."""
         from pathlib import Path
+        # Statute files are in cosilico-us, not cosilico-engine
+        candidates = [
+            Path.home() / "CosilicoAI" / "cosilico-us" / "26/62/a/adjusted_gross_income.cosilico",
+            Path(__file__).parents[2] / "cosilico-us" / "26/62/a/adjusted_gross_income.cosilico",
+        ]
+        for path in candidates:
+            if path.exists():
+                return path
+        pytest.skip("AGI file not found in cosilico-us - statute files live there, not in cosilico-engine")
 
-        agi_path = Path(__file__).parent.parent / "statute/26/62/a/adjusted_gross_income.cosilico"
+    def test_agi_file_parses(self, agi_path):
+        """AGI cosilico file parses without errors."""
         module = parse_file(str(agi_path))
 
         assert module is not None
         assert len(module.variables) == 1
         assert module.variables[0].name == "adjusted_gross_income"
 
-    def test_agi_variable_metadata(self):
+    def test_agi_variable_metadata(self, agi_path):
         """AGI variable has correct metadata."""
-        from pathlib import Path
-
-        agi_path = Path(__file__).parent.parent / "statute/26/62/a/adjusted_gross_income.cosilico"
         module = parse_file(str(agi_path))
         var = module.variables[0]
 
@@ -47,22 +59,16 @@ class TestAGIParsing:
         assert var.label == "Adjusted Gross Income"
         assert "26 USC 62" in var.reference
 
-    def test_agi_has_formula(self):
+    def test_agi_has_formula(self, agi_path):
         """AGI variable has a formula defined."""
-        from pathlib import Path
-
-        agi_path = Path(__file__).parent.parent / "statute/26/62/a/adjusted_gross_income.cosilico"
         module = parse_file(str(agi_path))
         var = module.variables[0]
 
         assert var.formula is not None
         assert var.formula.return_expr is not None
 
-    def test_agi_references(self):
+    def test_agi_references(self, agi_path):
         """AGI module has correct references."""
-        from pathlib import Path
-
-        agi_path = Path(__file__).parent.parent / "statute/26/62/a/adjusted_gross_income.cosilico"
         module = parse_file(str(agi_path))
 
         assert module.references is not None
