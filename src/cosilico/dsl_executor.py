@@ -589,6 +589,11 @@ def get_default_parameters() -> dict:
                         {"threshold": float("inf"), "rate": 0.20},
                     ],
                 },
+                # §152(c)(3) - Qualifying child age requirements
+                "qualifying_child": {
+                    "age_limit_general": 19,  # Under 19 at end of year
+                    "age_limit_student": 24,  # Under 24 if full-time student
+                },
             },
         },
     }

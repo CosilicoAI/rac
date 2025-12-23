@@ -1,0 +1,94 @@
+# 26 USC §152(c) - Qualifying Child
+#
+# "(c) Qualifying child.—For purposes of this section—
+#   (1) In general.—The term 'qualifying child' means, with respect to any
+#       taxpayer for any taxable year, an individual—
+#       (A) who bears a relationship to the taxpayer described in paragraph (2),
+#       (B) who has the same principal place of abode as the taxpayer for more
+#           than one-half of such taxable year,
+#       (C) who meets the age requirements of paragraph (3), and
+#       (D) who has not provided over one-half of such individual's own support
+#           for the calendar year in which the taxable year of the taxpayer begins."
+#
+# Note: For EITC under §32(c)(3), paragraph (1)(D) and section 152(e) are
+# disregarded, but an additional abode test applies under §32(c)(3)(C).
+
+module statute.26.152.c
+version "2024.1"
+
+parameters {
+  # Age thresholds from §152(c)(3)
+  age_limit_general: gov.irs.qualifying_child.age_limit_general  # 19
+  age_limit_student: gov.irs.qualifying_child.age_limit_student  # 24
+}
+
+# §152(c)(3) - Age requirements
+variable meets_age_requirement {
+  entity Person
+  period Year
+  dtype Boolean
+  label "Meets Qualifying Child Age Requirement"
+  description "Under 19, or under 24 if student, or any age if permanently disabled"
+
+  formula {
+    # (A) has not attained the age of 19 as of the close of the calendar year
+    let under_19 = age < age_limit_general
+
+    # (B) is a student who has not attained the age of 24
+    let student_under_24 = is_student and age < age_limit_student
+
+    # (C) is permanently and totally disabled at any time during such calendar year
+    let disabled = is_permanently_disabled
+
+    return under_19 or student_under_24 or disabled
+  }
+}
+
+# §152(c)(2) - Relationship test
+# Simplified: child, stepchild, foster child, sibling, or descendant thereof
+variable meets_relationship_test {
+  entity Person
+  period Year
+  dtype Boolean
+  label "Meets Qualifying Child Relationship Test"
+  description "Is child, stepchild, sibling, or descendant of taxpayer"
+
+  formula {
+    # In CPS, we assume children in same household meet relationship test
+    # A more complete implementation would check actual relationship codes
+    return is_dependent_in_tax_unit
+  }
+}
+
+# §152(c)(1)(B) - Principal place of abode
+variable meets_abode_test {
+  entity Person
+  period Year
+  dtype Boolean
+  label "Meets Principal Place of Abode Test"
+  description "Same principal place of abode for more than half the year"
+
+  formula {
+    # In CPS, same household_id implies shared abode
+    # A more complete implementation would check months_in_household
+    return is_in_household
+  }
+}
+
+# Combined test per §152(c)(1)
+variable is_qualifying_child {
+  entity Person
+  period Year
+  dtype Boolean
+  label "Is Qualifying Child under §152(c)"
+  description "Meets all requirements of 26 USC §152(c)"
+
+  formula {
+    return (
+      meets_relationship_test
+      and meets_abode_test
+      and meets_age_requirement
+      # §152(c)(1)(D) support test is disregarded for EITC
+    )
+  }
+}
