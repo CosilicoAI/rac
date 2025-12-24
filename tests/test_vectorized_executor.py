@@ -626,3 +626,59 @@ variable threshold {
         results = executor.execute(code, inputs)
 
         assert_array_equal(results["threshold"], [250000, 200000])
+
+
+class TestMatchExpression:
+    """Tests for match expression with value comparison."""
+
+    def test_match_on_value(self):
+        """Match expression should compare against the match value."""
+        code = """
+variable test_rate {
+  entity TaxUnit
+  period Year
+  dtype Rate
+
+  formula {
+    let n_children = min(num_qualifying_children, 3)
+    return match n_children {
+      case 0 => 0.0765
+      case 1 => 0.34
+      case 2 => 0.40
+      case 3 => 0.45
+    }
+  }
+}
+"""
+        executor = VectorizedExecutor(parameters={})
+        inputs = {"num_qualifying_children": np.array([2, 0, 1, 3])}
+        results = executor.execute(code, inputs)
+
+        # n_children=2 -> 0.40, n_children=0 -> 0.0765, etc.
+        assert_array_almost_equal(
+            results["test_rate"],
+            [0.40, 0.0765, 0.34, 0.45]
+        )
+
+    def test_match_with_else(self):
+        """Match expression with else clause for unmatched values."""
+        code = """
+variable category {
+  entity TaxUnit
+  period Year
+  dtype Rate
+
+  formula {
+    return match count {
+      case 0 => 1.0
+      case 1 => 2.0
+      else => 9.0
+    }
+  }
+}
+"""
+        executor = VectorizedExecutor(parameters={})
+        inputs = {"count": np.array([0, 1, 5, 100])}
+        results = executor.execute(code, inputs)
+
+        assert_array_equal(results["category"], [1.0, 2.0, 9.0, 9.0])

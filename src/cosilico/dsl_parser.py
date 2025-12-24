@@ -192,6 +192,7 @@ class MatchCase:
 
 @dataclass
 class MatchExpr:
+    match_value: Optional["Expression"]  # Value to match against (None for condition-only)
     cases: list[MatchCase]
 
 
@@ -1020,7 +1021,7 @@ class Parser:
                 break
 
         self._consume(TokenType.RBRACE, "Expected '}'")
-        return MatchExpr(cases=cases)
+        return MatchExpr(match_value=match_value, cases=cases)
 
     def _parse_literal_value(self) -> Any:
         if self._check(TokenType.NUMBER):

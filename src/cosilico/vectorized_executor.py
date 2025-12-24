@@ -93,6 +93,10 @@ class VectorizedContext:
         if name in self.inputs:
             return self.inputs[name]
 
+        # Check parameters (for dict/array parameters used in IndexExpr)
+        if name in self.parameters:
+            return self.parameters[name]
+
         # Resolve alias
         if self.references:
             path = self.references.get_path(name)
@@ -301,11 +305,23 @@ def evaluate_expression_vectorized(expr: Expression, ctx: VectorizedContext) -> 
         result = np.zeros(ctx._entity_size(ctx.current_entity))
         matched = np.zeros(len(result), dtype=bool)
 
+        # If we have a match value (match x { ... }), compare case patterns against it
+        match_value = None
+        if expr.match_value is not None:
+            match_value = evaluate_expression_vectorized(expr.match_value, ctx)
+
         for case in expr.cases:
             if case.condition is None:  # else case
                 result[~matched] = evaluate_expression_vectorized(case.value, ctx)[~matched]
             else:
-                cond = evaluate_expression_vectorized(case.condition, ctx).astype(bool)
+                if match_value is not None:
+                    # Compare match_value against case.condition (pattern matching)
+                    pattern = evaluate_expression_vectorized(case.condition, ctx)
+                    cond = (match_value == pattern)
+                else:
+                    # Original behavior: evaluate condition as boolean
+                    cond = evaluate_expression_vectorized(case.condition, ctx).astype(bool)
+
                 mask = cond & ~matched
                 if np.any(mask):
                     result[mask] = evaluate_expression_vectorized(case.value, ctx)[mask]
@@ -392,9 +408,16 @@ def _call_builtin_vectorized(
         values = evaluate_expression_vectorized(args[1], ctx)
         return ctx.aggregate_to_parent(values, "Person", "TaxUnit", "sum")
 
-    if func_name == "count" and len(args) == 2:
-        values = evaluate_expression_vectorized(args[1], ctx)
-        return ctx.aggregate_to_parent(values.astype(float), "Person", "TaxUnit", "sum")
+    if func_name == "count":
+        if len(args) == 2:
+            # count(members, condition) - aggregate Person to TaxUnit
+            values = evaluate_expression_vectorized(args[1], ctx)
+            return ctx.aggregate_to_parent(values.astype(float), "Person", "TaxUnit", "sum")
+        elif len(args) == 1:
+            # person.count(condition) - 1-arg form, aggregate Person to TaxUnit
+            # The "person" prefix indicates we're counting at Person level
+            values = evaluate_expression_vectorized(args[0], ctx)
+            return ctx.aggregate_to_parent(values.astype(float), "Person", "TaxUnit", "sum")
 
     if func_name == "any" and len(args) == 2:
         values = evaluate_expression_vectorized(args[1], ctx)
