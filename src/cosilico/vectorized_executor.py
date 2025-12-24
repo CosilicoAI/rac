@@ -80,6 +80,9 @@ class VectorizedContext:
     # Current entity context (for formula evaluation)
     current_entity: str = "Person"
 
+    # Enum values from module declarations (flattened set of all enum member names)
+    enum_values: set[str] = field(default_factory=set)
+
     def get_variable(self, name: str) -> np.ndarray:
         """Get variable value as array, computing if needed."""
         # Check cache
@@ -241,6 +244,11 @@ def evaluate_expression_vectorized(expr: Expression, ctx: VectorizedContext) -> 
         return np.full(size, expr.value)
 
     if isinstance(expr, Identifier):
+        # Check if it's an enum value first (e.g., JOINT, SINGLE)
+        if ctx.enum_values and expr.name in ctx.enum_values:
+            # Return the string value broadcast to current entity size
+            size = ctx._entity_size(ctx.current_entity)
+            return np.full(size, expr.name, dtype=object)
         return ctx.get_variable(expr.name)
 
     if isinstance(expr, VariableRef):
@@ -608,6 +616,11 @@ class VectorizedExecutor:
         variables = {var.name: var for var in module.variables}
         dep_graph = self._build_dependency_graph(module)
 
+        # Collect all enum values for identifier resolution
+        enum_values: set[str] = set()
+        for enum_def in module.enums:
+            enum_values.update(enum_def.values)
+
         # Create execution context
         ctx = VectorizedContext(
             inputs=inputs,
@@ -615,6 +628,7 @@ class VectorizedExecutor:
             variables=variables,
             entity_index=entity_index,
             references=module.references,
+            enum_values=enum_values,
         )
 
         # Use scenario cache if provided

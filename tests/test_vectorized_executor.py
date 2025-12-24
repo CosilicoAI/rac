@@ -538,3 +538,91 @@ variable tax {
         elapsed = time.perf_counter() - start
 
         assert elapsed < 0.010, f"Execution took {elapsed*1000:.1f}ms, expected <10ms"
+
+
+class TestEnumSupport:
+    """Tests for enum declaration and comparison support."""
+
+    def test_enum_comparison_without_quotes(self):
+        """Enum values can be used without quotes in comparisons."""
+        code = """
+enum FilingStatus {
+  SINGLE
+  JOINT
+  HEAD_OF_HOUSEHOLD
+}
+
+variable threshold {
+  entity TaxUnit
+  period Year
+  dtype Money
+
+  formula {
+    return if filing_status == JOINT then 250000 else 200000
+  }
+}
+"""
+        executor = VectorizedExecutor(parameters={})
+        inputs = {"filing_status": np.array(["JOINT", "SINGLE", "JOINT"])}
+        results = executor.execute(code, inputs)
+
+        # JOINT gets $250k, SINGLE gets $200k
+        assert_array_equal(results["threshold"], [250000, 200000, 250000])
+
+    def test_enum_multiple_values(self):
+        """Test multiple enum values in if/else chain."""
+        code = """
+enum FilingStatus {
+  SINGLE
+  JOINT
+  SEPARATE
+  HEAD_OF_HOUSEHOLD
+  SURVIVING_SPOUSE
+}
+
+variable niit_threshold {
+  entity TaxUnit
+  period Year
+  dtype Money
+
+  formula {
+    return if filing_status == JOINT then 250000
+      else if filing_status == SURVIVING_SPOUSE then 250000
+      else if filing_status == SEPARATE then 125000
+      else 200000
+  }
+}
+"""
+        executor = VectorizedExecutor(parameters={})
+        inputs = {
+            "filing_status": np.array([
+                "JOINT", "SINGLE", "SEPARATE", "HEAD_OF_HOUSEHOLD", "SURVIVING_SPOUSE"
+            ])
+        }
+        results = executor.execute(code, inputs)
+
+        assert_array_equal(
+            results["niit_threshold"],
+            [250000, 200000, 125000, 200000, 250000]
+        )
+
+    def test_string_literals_still_work(self):
+        """String literals continue to work alongside enum support."""
+        code = """
+enum FilingStatus { SINGLE JOINT }
+
+variable threshold {
+  entity TaxUnit
+  period Year
+  dtype Money
+
+  formula {
+    return if filing_status == "JOINT" then 250000 else 200000
+  }
+}
+"""
+        executor = VectorizedExecutor(parameters={})
+        inputs = {"filing_status": np.array(["JOINT", "SINGLE"])}
+        results = executor.execute(code, inputs)
+
+        assert_array_equal(results["threshold"], [250000, 200000])
