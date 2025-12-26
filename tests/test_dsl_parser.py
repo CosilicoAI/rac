@@ -778,6 +778,36 @@ variable tax {
         except SyntaxError:
             pass  # Expected behavior
 
+    def test_unknown_field_in_variable(self):
+        """Parser raises error on unknown field in variable definition."""
+        code = '''
+variable tax {
+  entity TaxUnit
+  period Year
+  dtype Money
+  reference "26 USC 1"
+}
+'''
+        with pytest.raises(SyntaxError) as exc_info:
+            parse_dsl(code)
+        assert "Unknown field 'reference'" in str(exc_info.value)
+
+    def test_unknown_field_helpful_message(self):
+        """Error message lists valid fields."""
+        code = '''
+variable tax {
+  entity TaxUnit
+  period Year
+  dtype Money
+  citation "26 USC 1"
+}
+'''
+        with pytest.raises(SyntaxError) as exc_info:
+            parse_dsl(code)
+        assert "Valid fields:" in str(exc_info.value)
+        assert "entity" in str(exc_info.value)
+        assert "formula" in str(exc_info.value)
+
 
 class TestParserIntegration:
     """Integration tests for complete DSL files."""

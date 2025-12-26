@@ -725,7 +725,12 @@ class Parser:
                 self._advance()
                 var.default = self._parse_literal_value()
             else:
-                self._advance()  # Skip unknown
+                # Strict mode: error on unknown fields
+                token = self._peek()
+                raise SyntaxError(
+                    f"Unknown field '{token.value}' in variable definition at line {token.line}. "
+                    f"Valid fields: entity, period, dtype, label, description, unit, formula, defined_for, default"
+                )
 
         self._consume(TokenType.RBRACE, "Expected '}'")
         return var
