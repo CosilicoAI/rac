@@ -500,6 +500,16 @@ class Parser:
                 module.variables.append(self._parse_variable())
             elif self._check(TokenType.ENUM):
                 module.enums.append(self._parse_enum())
+            elif self._check(TokenType.ENTITY):
+                # Inline variable format (file-is-the-variable)
+                # entity TaxUnit
+                # period Year
+                # dtype Money
+                # formula:
+                #   ...
+                inline_var = self._parse_inline_variable()
+                if inline_var:
+                    module.variables.append(inline_var)
             else:
                 # Skip unexpected tokens
                 self._advance()
@@ -577,24 +587,44 @@ class Parser:
     def _parse_imports_block(self) -> ReferencesBlock:
         """Parse an imports block mapping aliases to file paths.
 
-        Syntax:
-            imports {
+        Syntax (YAML-like with colon):
+            imports:
               earned_income: statute/26/32/c/2/A/earned_income
               filing_status: statute/26/1/filing_status
-            }
 
         Also accepts 'references' for backwards compatibility.
+        Block ends when we hit a top-level keyword (entity, period, formula, etc.)
         """
         # Accept either 'imports' or 'references' keyword
         if self._check(TokenType.IMPORTS):
             self._advance()
         else:
             self._consume(TokenType.REFERENCES, "Expected 'imports' or 'references'")
-        self._consume(TokenType.LBRACE, "Expected '{'")
+
+        # Expect colon after imports keyword
+        self._consume(TokenType.COLON, "Expected ':' after imports")
 
         references = []
 
-        while not self._check(TokenType.RBRACE) and not self._is_at_end():
+        # Parse references until we hit a top-level keyword
+        top_level_keywords = {
+            TokenType.ENTITY, TokenType.PERIOD, TokenType.DTYPE,
+            TokenType.LABEL, TokenType.DESCRIPTION, TokenType.UNIT,
+            TokenType.FORMULA, TokenType.DEFINED_FOR, TokenType.DEFAULT,
+            TokenType.VARIABLE, TokenType.ENUM, TokenType.PRIVATE,
+            TokenType.INTERNAL, TokenType.MODULE, TokenType.VERSION,
+            TokenType.IMPORTS, TokenType.REFERENCES,
+        }
+
+        while not self._is_at_end():
+            # Check if we've hit a top-level keyword (end of imports block)
+            if any(self._check(kw) for kw in top_level_keywords):
+                break
+
+            # Skip comments (already handled by lexer, but check for empty lines)
+            if self._check(TokenType.EOF):
+                break
+
             # Parse alias name
             alias = self._consume(TokenType.IDENTIFIER, "Expected alias name").value
 
@@ -604,8 +634,6 @@ class Parser:
             statute_path = self._parse_statute_path()
 
             references.append(StatuteReference(alias=alias, statute_path=statute_path))
-
-        self._consume(TokenType.RBRACE, "Expected '}'")
 
         return ReferencesBlock(references=references)
 
@@ -679,6 +707,130 @@ class Parser:
                 raise SyntaxError(f"Expected identifier or number after '.' at line {self._peek().line}")
 
         return name
+
+    def _parse_inline_variable(self) -> Optional[VariableDef]:
+        """Parse inline variable format (file-is-the-variable).
+
+        Syntax (YAML-like):
+            entity TaxUnit
+            period Year
+            dtype Money
+            unit "USD"
+            label "..."
+            description "..."
+
+            formula:
+              let x = ...
+              return ...
+
+        Returns a VariableDef with name="inline" (to be set by caller based on filename).
+        """
+        var = VariableDef(
+            name="inline",  # Caller should set based on filename
+            entity="",
+            period="",
+            dtype="",
+        )
+
+        # Top-level keywords that end metadata and start formula
+        formula_start = {TokenType.FORMULA}
+
+        while not self._is_at_end():
+            if self._check(TokenType.ENTITY):
+                self._advance()
+                var.entity = self._consume(TokenType.IDENTIFIER, "Expected entity type").value
+            elif self._check(TokenType.PERIOD):
+                self._advance()
+                var.period = self._consume(TokenType.IDENTIFIER, "Expected period type").value
+            elif self._check(TokenType.DTYPE):
+                self._advance()
+                var.dtype = self._parse_dtype()
+            elif self._check(TokenType.LABEL):
+                self._advance()
+                var.label = self._consume(TokenType.STRING, "Expected label string").value
+            elif self._check(TokenType.DESCRIPTION):
+                self._advance()
+                var.description = self._consume(TokenType.STRING, "Expected description string").value
+            elif self._check(TokenType.UNIT):
+                self._advance()
+                var.unit = self._consume(TokenType.STRING, "Expected unit string").value
+            elif self._check(TokenType.DEFAULT):
+                self._advance()
+                var.default = self._parse_literal_value()
+            elif self._check(TokenType.FORMULA):
+                self._advance()
+                # Expect colon after formula keyword
+                self._consume(TokenType.COLON, "Expected ':' after formula")
+                # Parse formula block (no braces in YAML-like syntax)
+                var.formula = self._parse_inline_formula_block()
+                break  # Formula is last, stop parsing
+            elif self._check(TokenType.DEFINED_FOR):
+                self._advance()
+                # defined_for can use colon syntax too
+                if self._check(TokenType.COLON):
+                    self._advance()
+                elif self._check(TokenType.LBRACE):
+                    self._advance()
+                var.defined_for = self._parse_expression()
+                if self._check(TokenType.RBRACE):
+                    self._advance()
+            else:
+                # Unknown token - stop parsing this variable
+                break
+
+        return var
+
+    def _parse_inline_formula_block(self) -> FormulaBlock:
+        """Parse formula block in YAML-like syntax (no braces).
+
+        Syntax:
+            formula:
+              let earned = wages + salaries
+              return earned * rate
+
+        Ends at EOF or next top-level keyword.
+        """
+        bindings = []
+        return_expr = None
+
+        # Keywords that end the formula block
+        end_keywords = {
+            TokenType.ENTITY, TokenType.PERIOD, TokenType.DTYPE,
+            TokenType.LABEL, TokenType.DESCRIPTION, TokenType.UNIT,
+            TokenType.FORMULA, TokenType.VARIABLE, TokenType.ENUM,
+            TokenType.MODULE, TokenType.VERSION, TokenType.IMPORTS,
+            TokenType.REFERENCES,
+        }
+
+        while not self._is_at_end():
+            # Check if we've hit a top-level keyword (end of formula)
+            if any(self._check(kw) for kw in end_keywords):
+                break
+
+            if self._check(TokenType.LET):
+                bindings.append(self._parse_let_binding())
+            elif self._check(TokenType.RETURN):
+                self._advance()
+                return_expr = self._parse_expression()
+                break
+            elif self._check(TokenType.IDENTIFIER):
+                # Could be assignment: name = expr
+                if self._peek_next_is(TokenType.EQUALS):
+                    # Parse as let binding without 'let' keyword
+                    name = self._advance().value
+                    self._consume(TokenType.EQUALS, "Expected '='")
+                    value = self._parse_expression()
+                    bindings.append(LetBinding(name=name, value=value))
+                else:
+                    # Expression - treat as return
+                    return_expr = self._parse_expression()
+                    break
+            else:
+                # Unknown - treat as return expression
+                return_expr = self._parse_expression()
+                break
+
+        return FormulaBlock(bindings=bindings, return_expr=return_expr)
 
     def _parse_variable(self) -> VariableDef:
         self._consume(TokenType.VARIABLE, "Expected 'variable'")
