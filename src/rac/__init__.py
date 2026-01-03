@@ -1,56 +1,72 @@
-"""Cosilico AI Rules Engine.
+"""RAC: Rules as Code parser and executor."""
 
-RAC (Rules as Code) provides tools for encoding tax and benefit law
-as executable code.
+from datetime import date
 
-Example usage:
-    from rac import RACRegistry, load_statute
-
-    # Quick lookup
-    var = load_statute("us:statute/26/21#child_and_dependent_care_credit")
-    print(var.label)  # "Child and Dependent Care Credit"
-
-    # Full registry for batch operations
-    registry = RACRegistry()
-    registry.load_jurisdiction("us", "/path/to/rac-us")
-
-    for var in registry.list_variables("us:statute/26"):
-        print(f"{var.ref}: {var.label}")
-"""
-
-__version__ = "0.1.0"
-
-from .registry import (
-    RACRegistry,
-    RACFile,
-    VariableInfo,
-    ParameterInfo,
-    InputInfo,
-    load_statute,
-)
-
-from .dsl_parser import (
+from .ast import (
+    AmendDecl,
+    BinOp,
+    Call,
+    Cond,
+    EntityDecl,
+    Expr,
+    FieldAccess,
+    Literal,
+    Match,
     Module,
-    VariableDef,
-    ParameterDef,
-    InputDef,
-    parse_dsl,
-    parse_file,
+    TemporalValue,
+    UnaryOp,
+    Var,
+    VariableDecl,
 )
+from .compiler import IR, Compiler, CompileError, ResolvedVar
+from .executor import Context, ExecutionError, Executor, Result, run
+from .parser import Lexer, ParseError, Parser, parse, parse_file
+from .schema import Entity, Field, Relation, Schema
+
+
+def compile(modules: list[Module], as_of: date) -> IR:
+    """Compile modules for a specific date."""
+    return Compiler(modules).compile(as_of)
+
+
+def execute(ir: IR, data: dict[str, list[dict]]) -> Result:
+    """Execute compiled IR against data."""
+    return run(ir, data)
+
 
 __all__ = [
-    # Registry
-    "RACRegistry",
-    "RACFile",
-    "VariableInfo",
-    "ParameterInfo",
-    "InputInfo",
-    "load_statute",
-    # Parser
-    "Module",
-    "VariableDef",
-    "ParameterDef",
-    "InputDef",
-    "parse_dsl",
+    "parse",
     "parse_file",
+    "ParseError",
+    "Lexer",
+    "Parser",
+    "Module",
+    "EntityDecl",
+    "VariableDecl",
+    "AmendDecl",
+    "TemporalValue",
+    "Expr",
+    "Literal",
+    "Var",
+    "BinOp",
+    "UnaryOp",
+    "Call",
+    "FieldAccess",
+    "Match",
+    "Cond",
+    "Schema",
+    "Entity",
+    "Field",
+    "Relation",
+    "compile",
+    "Compiler",
+    "CompileError",
+    "IR",
+    "ResolvedVar",
+    "execute",
+    "run",
+    "Executor",
+    "Context",
+    "Result",
+    "ExecutionError",
 ]
