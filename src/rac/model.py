@@ -168,8 +168,14 @@ class Model:
         Returns:
             CompareResult with baseline and reform results.
         """
-        baseline_result = self.run(data)
-        reform_result = reform.run(data)
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            baseline_future = executor.submit(self.run, data)
+            reform_future = executor.submit(reform.run, data)
+            baseline_result = baseline_future.result()
+            reform_result = reform_future.result()
+
         return CompareResult(
             baseline=baseline_result,
             reform=reform_result,
