@@ -9,7 +9,7 @@ from datetime import date
 from pydantic import BaseModel
 
 from . import ast
-from .schema import Entity, Field, Relation, Schema
+from .schema import Entity, Field, ForeignKey, ReverseRelation, Schema
 
 
 class ResolvedVar(BaseModel):
@@ -18,7 +18,7 @@ class ResolvedVar(BaseModel):
     path: str
     entity: str | None = None
     expr: ast.Expr
-    deps: set[str] = set()  # paths of variables this depends on
+    deps: set[str] = set()
 
     class Config:
         arbitrary_types_allowed = True
@@ -27,7 +27,7 @@ class ResolvedVar(BaseModel):
 class IR(BaseModel):
     """Intermediate representation: resolved variable graph + schema."""
 
-    schema_: Schema  # renamed to avoid conflict with pydantic
+    schema_: Schema
     variables: dict[str, ResolvedVar]
     order: list[str]  # topologically sorted variable paths
 
@@ -39,31 +39,66 @@ class CompileError(Exception):
     pass
 
 
+class TemporalLayer:
+    """Tracks temporal values for a variable, with amendment stacking."""
+
+    def __init__(self, path: str, entity: str | None = None):
+        self.path = path
+        self.entity = entity
+        self.values: list[ast.TemporalValue] = []
+        self.repealed_after: date | None = None
+
+    def add_values(self, values: list[ast.TemporalValue], replace: bool = False) -> None:
+        """Add temporal values. If replace=True, clears existing values first."""
+        if replace:
+            self.values = list(values)
+        else:
+            self.values.extend(values)
+
+    def repeal(self, effective: date) -> None:
+        """Mark variable as repealed after a date."""
+        self.repealed_after = effective
+
+    def resolve(self, as_of: date) -> ast.Expr | None:
+        """Get the applicable expression for a date. Later values win."""
+        if self.repealed_after and as_of >= self.repealed_after:
+            return None
+
+        result = None
+        for tv in self.values:
+            if tv.start <= as_of and (tv.end is None or as_of <= tv.end):
+                result = tv.expr
+        return result
+
+
 class Compiler:
     """Compiles parsed modules into IR."""
 
     def __init__(self, modules: list[ast.Module]):
         self.modules = modules
         self.schema = Schema()
-        self.var_decls: dict[str, ast.VariableDecl] = {}
-        self.amendments: list[ast.AmendDecl] = []
+        self.layers: dict[str, TemporalLayer] = {}
 
     def compile(self, as_of: date) -> IR:
         """Compile modules for a specific date."""
-        # collect all declarations
+        # Process modules in order (later modules can amend earlier ones)
         for module in self.modules:
             self._collect_entities(module)
             self._collect_variables(module)
-            self._collect_amendments(module)
+            self._apply_amendments(module)
+            self._apply_repeals(module)
 
-        # resolve temporal layers
+        # Infer reverse relations from foreign keys
+        self.schema.infer_reverse_relations()
+
+        # Resolve temporal layers
         resolved = self._resolve_temporal(as_of)
 
-        # compute dependencies
+        # Compute dependencies
         for var in resolved.values():
             var.deps = self._find_deps(var.expr)
 
-        # topological sort
+        # Topological sort
         order = self._topo_sort(resolved)
 
         return IR(schema_=self.schema, variables=resolved, order=order)
@@ -73,48 +108,44 @@ class Compiler:
             entity = Entity(name=decl.name)
             for name, dtype in decl.fields:
                 entity.fields[name] = Field(name=name, dtype=dtype)
-            for name, target, many in decl.relations:
-                entity.relations[name] = Relation(name=name, target=target, many=many)
+            for name, target in decl.foreign_keys:
+                entity.foreign_keys[name] = ForeignKey(name=name, target=target)
+            for name, source, source_field in decl.reverse_relations:
+                entity.reverse_relations[name] = ReverseRelation(
+                    name=name, source=source, source_field=source_field
+                )
             self.schema.add_entity(entity)
 
     def _collect_variables(self, module: ast.Module) -> None:
         for decl in module.variables:
-            if decl.path in self.var_decls:
+            if decl.path in self.layers:
                 raise CompileError(f"duplicate variable: {decl.path}")
-            self.var_decls[decl.path] = decl
+            layer = TemporalLayer(decl.path, decl.entity)
+            layer.add_values(decl.values)
+            self.layers[decl.path] = layer
 
-    def _collect_amendments(self, module: ast.Module) -> None:
-        self.amendments.extend(module.amendments)
+    def _apply_amendments(self, module: ast.Module) -> None:
+        for amend in module.amendments:
+            if amend.target not in self.layers:
+                # Amendment can create new variable (like legislation adding new sections)
+                self.layers[amend.target] = TemporalLayer(amend.target)
+            self.layers[amend.target].add_values(amend.values, replace=amend.replace)
+
+    def _apply_repeals(self, module: ast.Module) -> None:
+        for repeal in module.repeals:
+            if repeal.target in self.layers:
+                self.layers[repeal.target].repeal(repeal.effective)
 
     def _resolve_temporal(self, as_of: date) -> dict[str, ResolvedVar]:
         """Resolve which temporal value applies for each variable."""
         resolved = {}
 
-        for path, decl in self.var_decls.items():
-            expr = self._pick_temporal(decl.values, as_of)
-            if expr is None:
-                raise CompileError(f"no value for {path} at {as_of}")
-            resolved[path] = ResolvedVar(path=path, entity=decl.entity, expr=expr)
-
-        # apply amendments (later amendments override earlier ones)
-        for amend in self.amendments:
-            if amend.target not in resolved:
-                raise CompileError(f"amending unknown variable: {amend.target}")
-            expr = self._pick_temporal(amend.values, as_of)
-            if expr is not None:
-                resolved[amend.target].expr = expr
+        for path, layer in self.layers.items():
+            expr = layer.resolve(as_of)
+            if expr is not None:  # None means repealed or no value
+                resolved[path] = ResolvedVar(path=path, entity=layer.entity, expr=expr)
 
         return resolved
-
-    def _pick_temporal(
-        self, values: list[ast.TemporalValue], as_of: date
-    ) -> ast.Expr | None:
-        """Pick the applicable temporal value for a date. Later values win."""
-        result = None
-        for tv in values:
-            if tv.start <= as_of and (tv.end is None or as_of <= tv.end):
-                result = tv.expr
-        return result
 
     def _find_deps(self, expr: ast.Expr) -> set[str]:
         """Find all variable paths referenced in an expression."""
@@ -127,7 +158,7 @@ class Compiler:
             case ast.Literal():
                 pass
             case ast.Var(path=path):
-                if "/" in path:  # only track full paths, not local fields
+                if "/" in path:
                     deps.add(path)
             case ast.BinOp(left=left, right=right):
                 self._walk_deps(left, deps)
@@ -141,7 +172,7 @@ class Compiler:
                 self._walk_deps(obj, deps)
             case ast.Match(subject=subject, cases=cases, default=default):
                 self._walk_deps(subject, deps)
-                for pattern, result in cases:
+                for _, result in cases:
                     self._walk_deps(result, deps)
                 if default:
                     self._walk_deps(default, deps)

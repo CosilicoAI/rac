@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from . import ast
 from .compiler import IR
+from .schema import Data
 
 
 class ExecutionError(Exception):
@@ -15,20 +16,32 @@ class ExecutionError(Exception):
 class Context(BaseModel):
     """Runtime context for evaluation."""
 
-    data: dict[str, list[dict]]  # entity_name -> rows
+    data: Data
     computed: dict[str, Any] = {}  # path -> value
-    current_entity: dict | None = None  # when evaluating entity-scoped vars
+    current_row: dict | None = None  # when evaluating entity-scoped vars
+    current_entity: str | None = None
 
     class Config:
         arbitrary_types_allowed = True
 
     def get(self, path: str) -> Any:
-        """Get a value by path. Checks computed first, then current entity."""
+        """Get a value by path."""
         if path in self.computed:
             return self.computed[path]
-        if self.current_entity and path in self.current_entity:
-            return self.current_entity[path]
+        if self.current_row and path in self.current_row:
+            return self.current_row[path]
         raise ExecutionError(f"undefined: {path}")
+
+    def get_related(self, entity: str, fk_field: str) -> list[dict]:
+        """Get related rows via reverse relation."""
+        if self.current_row is None:
+            raise ExecutionError("no current row for relation lookup")
+        pk = self.current_row.get("id")
+        return self.data.get_related(entity, fk_field, pk)
+
+    def get_fk_target(self, fk_value: Any, target_entity: str) -> dict | None:
+        """Get target row via foreign key."""
+        return self.data.get_row(target_entity, fk_value)
 
 
 BUILTINS = {
@@ -39,6 +52,8 @@ BUILTINS = {
     "sum": sum,
     "len": len,
     "clip": lambda x, lo, hi: max(lo, min(hi, x)),
+    "any": any,
+    "all": all,
 }
 
 
@@ -131,8 +146,8 @@ def evaluate(expr: ast.Expr, ctx: Context) -> Any:
 class Result(BaseModel):
     """Execution result."""
 
-    values: dict[str, Any]  # path -> computed value
-    entity_values: dict[str, dict[str, list[Any]]]  # entity -> path -> values per row
+    scalars: dict[str, Any]  # path -> computed value
+    entities: dict[str, dict[str, list[Any]]]  # entity -> path -> values per row
 
     class Config:
         arbitrary_types_allowed = True
@@ -144,38 +159,39 @@ class Executor:
     def __init__(self, ir: IR):
         self.ir = ir
 
-    def execute(self, data: dict[str, list[dict]]) -> Result:
+    def execute(self, data: Data) -> Result:
         """Execute the IR against input data."""
-        errors = self.ir.schema_.validate_data(data)
-        if errors:
-            raise ExecutionError(f"invalid data: {errors}")
-
         ctx = Context(data=data)
-        entity_values: dict[str, dict[str, list[Any]]] = {}
+        entities: dict[str, dict[str, list[Any]]] = {}
 
         for path in self.ir.order:
             var = self.ir.variables[path]
 
             if var.entity is None:
+                # Scalar variable
                 ctx.computed[path] = evaluate(var.expr, ctx)
             else:
+                # Entity-scoped variable
                 entity_name = var.entity
-                if entity_name not in data:
-                    raise ExecutionError(f"missing entity data: {entity_name}")
+                rows = data.get_rows(entity_name)
 
-                if entity_name not in entity_values:
-                    entity_values[entity_name] = {}
-                entity_values[entity_name][path] = []
+                if entity_name not in entities:
+                    entities[entity_name] = {}
+                entities[entity_name][path] = []
 
-                for row in data[entity_name]:
-                    ctx.current_entity = row
+                for row in rows:
+                    ctx.current_row = row
+                    ctx.current_entity = entity_name
                     val = evaluate(var.expr, ctx)
-                    entity_values[entity_name][path].append(val)
+                    entities[entity_name][path].append(val)
+                    ctx.current_row = None
                     ctx.current_entity = None
 
-        return Result(values=ctx.computed, entity_values=entity_values)
+        return Result(scalars=ctx.computed, entities=entities)
 
 
-def run(ir: IR, data: dict[str, list[dict]]) -> Result:
+def run(ir: IR, data: Data | dict[str, list[dict]]) -> Result:
     """Execute IR against data."""
+    if isinstance(data, dict):
+        data = Data(tables=data)
     return Executor(ir).execute(data)

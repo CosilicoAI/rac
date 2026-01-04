@@ -1,4 +1,4 @@
-"""RAC: Rules as Code parser and executor."""
+"""RAC: Rules as Code parser, compiler, and executor."""
 
 from datetime import date
 
@@ -10,18 +10,21 @@ from .ast import (
     EntityDecl,
     Expr,
     FieldAccess,
+    ImportDecl,
     Literal,
     Match,
     Module,
+    RepealDecl,
     TemporalValue,
     UnaryOp,
     Var,
     VariableDecl,
 )
+from .codegen import generate_rust
 from .compiler import IR, Compiler, CompileError, ResolvedVar
 from .executor import Context, ExecutionError, Executor, Result, run
 from .parser import Lexer, ParseError, Parser, parse, parse_file
-from .schema import Entity, Field, Relation, Schema
+from .schema import Data, Entity, Field, ForeignKey, ReverseRelation, Schema
 
 
 def compile(modules: list[Module], as_of: date) -> IR:
@@ -29,21 +32,25 @@ def compile(modules: list[Module], as_of: date) -> IR:
     return Compiler(modules).compile(as_of)
 
 
-def execute(ir: IR, data: dict[str, list[dict]]) -> Result:
+def execute(ir: IR, data: dict[str, list[dict]] | Data) -> Result:
     """Execute compiled IR against data."""
     return run(ir, data)
 
 
 __all__ = [
+    # Parse
     "parse",
     "parse_file",
     "ParseError",
     "Lexer",
     "Parser",
+    # AST
     "Module",
     "EntityDecl",
     "VariableDecl",
     "AmendDecl",
+    "RepealDecl",
+    "ImportDecl",
     "TemporalValue",
     "Expr",
     "Literal",
@@ -54,19 +61,26 @@ __all__ = [
     "FieldAccess",
     "Match",
     "Cond",
+    # Schema
     "Schema",
     "Entity",
     "Field",
-    "Relation",
+    "ForeignKey",
+    "ReverseRelation",
+    "Data",
+    # Compile
     "compile",
     "Compiler",
     "CompileError",
     "IR",
     "ResolvedVar",
+    # Execute
     "execute",
     "run",
     "Executor",
     "Context",
     "Result",
     "ExecutionError",
+    # Codegen
+    "generate_rust",
 ]
