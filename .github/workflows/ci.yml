@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
 
 jobs:
   test:
@@ -12,26 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          python-version: '3.11'
+          cache: true
+
+      - uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install pytest
+        run: uv sync
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short --ignore=tests/test_rac_format.py
+        run: uv run pytest tests/ -v
 
-      - name: Checkout rac-us for format tests
-        uses: actions/checkout@v4
-        with:
-          repository: CosilicoAI/rac-us
-          path: rac-us
-
-      - name: Run .rac format tests
-        env:
-          STATUTE_DIR: rac-us/statute
-        run: pytest tests/test_rac_format.py -v --tb=short
+      - name: Run example
+        run: uv run python examples/run_reform.py examples/uk_tax_benefit.rac examples/reform.rac
