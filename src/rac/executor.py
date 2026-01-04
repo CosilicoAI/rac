@@ -179,8 +179,13 @@ class Executor:
                     entities[entity_name] = {}
                 entities[entity_name][path] = []
 
-                for row in rows:
-                    ctx.current_row = row
+                for i, row in enumerate(rows):
+                    # Build augmented row with previously computed entity vars
+                    augmented = dict(row)
+                    for prev_path, prev_vals in entities.get(entity_name, {}).items():
+                        if len(prev_vals) > i:
+                            augmented[prev_path] = prev_vals[i]
+                    ctx.current_row = augmented
                     ctx.current_entity = entity_name
                     val = evaluate(var.expr, ctx)
                     entities[entity_name][path].append(val)
