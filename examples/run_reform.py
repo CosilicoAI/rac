@@ -2,8 +2,6 @@
 
 Usage:
     python examples/run_reform.py examples/uk_tax_benefit.rac examples/reform.rac
-
-Compares baseline vs reform on synthetic microdata and shows distributional impact.
 """
 
 import sys
@@ -12,7 +10,7 @@ from datetime import date
 
 import numpy as np
 
-from rac import compile, compile_to_binary, parse
+from rac import Model
 
 
 def load_microdata(n: int = 100_000) -> dict[str, np.ndarray]:
@@ -37,82 +35,53 @@ def run_analysis(baseline_path: str, reform_path: str):
     """Run baseline vs reform comparison."""
     as_of = date(2024, 6, 1)
 
-    # Parse
-    print(f"Parsing {baseline_path}...")
-    baseline_module = parse(open(baseline_path).read())
+    # Load models
+    print(f"Loading baseline: {baseline_path}")
+    baseline = Model.from_file(baseline_path, as_of=as_of)
 
-    print(f"Parsing {reform_path}...")
-    reform_module = parse(open(reform_path).read())
+    print(f"Loading reform: {reform_path}")
+    reform = Model.from_file(baseline_path, reform_path, as_of=as_of)
 
-    # Compile baseline
-    print("Compiling baseline...")
-    baseline_ir = compile([baseline_module], as_of=as_of)
-    baseline_binary = compile_to_binary(baseline_ir)
-
-    # Compile reform (amendments applied on top of baseline)
-    print("Compiling reform...")
-    reform_ir = compile([baseline_module, reform_module], as_of=as_of)
-    reform_binary = compile_to_binary(reform_ir)
+    # Show what changed
+    print("\nScalar changes:")
+    baseline_scalars = baseline.scalars
+    reform_scalars = reform.scalars
+    for k in baseline_scalars:
+        if baseline_scalars[k] != reform_scalars.get(k):
+            print(f"  {k}: {baseline_scalars[k]} -> {reform_scalars.get(k)}")
 
     # Load microdata
-    print("Loading microdata...")
+    print("\nLoading microdata...")
     data = load_microdata(n=1_000_000)
-    n = len(data["person"])
     income = data["person"][:, 0]
 
-    # Run baseline
-    print("Running baseline...")
+    # Compare
+    print("Running comparison...")
     start = time.perf_counter()
-    baseline_result = baseline_binary.run(data)
-    baseline_time = time.perf_counter() - start
+    comparison = baseline.compare(reform, data)
+    elapsed = time.perf_counter() - start
+    print(f"Done in {elapsed:.2f}s")
 
-    # Run reform
-    print("Running reform...")
-    start = time.perf_counter()
-    reform_result = reform_binary.run(data)
-    reform_time = time.perf_counter() - start
+    # Get summary for net_income
+    summary = comparison.summary("person", "person/net_income", income_col=income)
 
-    # Extract net income (last column)
-    baseline_net = baseline_result["person"][:, -1]
-    reform_net = reform_result["person"][:, -1]
-    gain = reform_net - baseline_net
-
-    # Analysis
+    # Print results
     print(f"\n{'='*60}")
     print("REFORM IMPACT ANALYSIS")
     print(f"{'='*60}")
-    print(f"Population: {n:,}")
-    print(f"Baseline run: {baseline_time:.3f}s ({n/baseline_time/1e6:.1f}M/sec)")
-    print(f"Reform run:   {reform_time:.3f}s ({n/reform_time/1e6:.1f}M/sec)")
-
-    # Aggregate stats
-    total_cost = gain.sum() * 12  # Annual
-    avg_gain = gain.mean()
-    winners = (gain > 1).sum()
-    losers = (gain < -1).sum()
-
+    print(f"Population: {summary['n']:,}")
     print(f"\nAggregate impact:")
-    print(f"  Total cost: £{total_cost/1e9:.2f}bn/year")
-    print(f"  Avg gain:   £{avg_gain:.0f}/month")
-    print(f"  Winners:    {winners:,} ({100*winners/n:.1f}%)")
-    print(f"  Losers:     {losers:,} ({100*losers/n:.1f}%)")
+    print(f"  Total cost: £{summary['total_annual']/1e9:.2f}bn/year")
+    print(f"  Avg gain:   £{summary['mean_monthly']:.0f}/month")
+    print(f"  Winners:    {summary['winners']:,} ({summary['winners_pct']:.1f}%)")
+    print(f"  Losers:     {summary['losers']:,} ({summary['losers_pct']:.1f}%)")
 
-    # Distributional analysis by income decile
-    print(f"\nBy income decile:")
-    print(f"{'Decile':>8} {'Avg Income':>12} {'Avg Gain':>10} {'% Winners':>10}")
-    print("-" * 44)
-
-    deciles = np.percentile(income, np.arange(10, 101, 10))
-    decile_idx = np.digitize(income, deciles)
-
-    for d in range(10):
-        mask = decile_idx == d
-        if mask.sum() == 0:
-            continue
-        avg_inc = income[mask].mean()
-        avg_g = gain[mask].mean()
-        pct_win = 100 * (gain[mask] > 1).sum() / mask.sum()
-        print(f"{d+1:>8} £{avg_inc:>10,.0f} £{avg_g:>9,.0f} {pct_win:>9.0f}%")
+    if "by_decile" in summary:
+        print(f"\nBy income decile:")
+        print(f"{'Decile':>8} {'Avg Income':>12} {'Avg Gain':>10} {'% Winners':>10}")
+        print("-" * 44)
+        for d in summary["by_decile"]:
+            print(f"{d['decile']:>8} £{d['avg_income']:>10,.0f} £{d['avg_gain']:>9,.0f} {d['pct_winners']:>9.0f}%")
 
 
 if __name__ == "__main__":

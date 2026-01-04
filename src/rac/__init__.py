@@ -23,6 +23,7 @@ from .ast import (
 from .codegen import generate_rust
 from .compiler import IR, Compiler, CompileError, ResolvedVar
 from .executor import Context, ExecutionError, Executor, Result, run
+from .model import CompareResult, Model, RunResult
 from .native import CompiledBinary, compile_to_binary
 from .parser import Lexer, ParseError, Parser, parse, parse_file
 from .schema import Data, Entity, Field, ForeignKey, ReverseRelation, Schema
@@ -87,4 +88,8 @@ __all__ = [
     # Native compilation
     "compile_to_binary",
     "CompiledBinary",
+    # High-level interface
+    "Model",
+    "RunResult",
+    "CompareResult",
 ]
