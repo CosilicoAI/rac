@@ -50,9 +50,9 @@ def run_analysis(baseline_path: str, reform_path: str):
         if baseline_scalars[k] != reform_scalars.get(k):
             print(f"  {k}: {baseline_scalars[k]} -> {reform_scalars.get(k)}")
 
-    # Load microdata
+    # Load microdata (UK population scale)
     print("\nLoading microdata...")
-    data = load_microdata(n=1_000_000)
+    data = load_microdata(n=67_000_000)
     income = data["person"][:, 0]
 
     # Compare

@@ -246,9 +246,12 @@ codegen-units = 1
     rust_code = generate_rust(ir)
     main_code = _generate_main(ir, entity_schemas, entity_outputs)
 
+    # Combine with lint suppression at top
+    full_code = "#![allow(unused_parens)]\n\n" + rust_code + "\n" + main_code
+
     src_dir = project_dir / "src"
     src_dir.mkdir(exist_ok=True)
-    (src_dir / "main.rs").write_text(rust_code + "\n" + main_code)
+    (src_dir / "main.rs").write_text(full_code)
 
     # Build
     print("Compiling native binary...")
@@ -336,8 +339,6 @@ def _generate_main(
         }}''')
 
     return f'''
-#![allow(unused_parens)]
-
 use rayon::prelude::*;
 use std::env;
 use std::fs::File;
