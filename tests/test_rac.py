@@ -7,6 +7,19 @@ from datetime import date
 
 import pytest
 
+# Shared RAC source for tax model tests (entity + scalar rate + entity variable)
+TAX_MODEL_SOURCE = """
+    entity person:
+        income: float
+
+    variable gov/rate:
+        from 2024-01-01: 0.20
+
+    variable person/tax:
+        entity: person
+        from 2024-01-01: income * gov/rate
+"""
+
 # -- Parser ------------------------------------------------------------------
 
 
@@ -587,17 +600,7 @@ class TestNative:
     def test_compile_to_binary(self):
         from rac import compile, compile_to_binary, parse
 
-        module = parse("""
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-        """)
+        module = parse(TAX_MODEL_SOURCE)
         ir = compile([module], as_of=date(2024, 6, 1))
         binary = compile_to_binary(ir)
         assert binary.binary_path.exists()
@@ -618,20 +621,7 @@ class TestModel:
     def test_model_from_source(self):
         from rac import Model
 
-        model = Model.from_source(
-            """
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-            """,
-            as_of=date(2024, 6, 1),
-        )
+        model = Model.from_source(TAX_MODEL_SOURCE, as_of=date(2024, 6, 1))
         assert "person" in model.entities
         assert "person/tax" in model.outputs("person")
 
@@ -975,17 +965,7 @@ class TestRustCodegenCoverage:
     def test_generate_rust_entity_computation(self):
         from rac import compile, generate_rust, parse
 
-        module = parse("""
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-        """)
+        module = parse(TAX_MODEL_SOURCE)
         ir = compile([module], as_of=date(2024, 6, 1))
         rust_code = generate_rust(ir)
         assert "PersonOutput" in rust_code
@@ -1258,16 +1238,11 @@ class TestExecutorCoverage2:
             evaluate(expr, ctx)
 
     def test_field_access_on_dict(self):
-        from rac.ast import FieldAccess, Literal
+        from rac.ast import FieldAccess, Var
         from rac.executor import Context, evaluate
         from rac.schema import Data
 
         ctx = Context(data=Data(tables={}), computed={"obj": {"name": "Alice"}})
-        expr = FieldAccess(obj=Literal(value=None), field="name")
-        # Simulate by pre-computing
-        ctx.computed["obj"] = {"name": "Alice"}
-        from rac.ast import Var
-
         expr = FieldAccess(obj=Var(path="obj"), field="name")
         result = evaluate(expr, ctx)
         assert result == "Alice"
@@ -1666,17 +1641,7 @@ class TestNativeCoverage:
     def tax_binary(self):
         from rac import compile, compile_to_binary, parse
 
-        module = parse("""
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-        """)
+        module = parse(TAX_MODEL_SOURCE)
         ir = compile([module], as_of=date(2024, 6, 1))
         return compile_to_binary(ir)
 
@@ -1713,17 +1678,7 @@ class TestNativeCoverage:
     def test_cache_hit(self):
         from rac import compile, compile_to_binary, parse
 
-        module = parse("""
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-        """)
+        module = parse(TAX_MODEL_SOURCE)
         ir = compile([module], as_of=date(2024, 6, 1))
         # First compile
         binary1 = compile_to_binary(ir)
@@ -1821,17 +1776,7 @@ class TestNativeCoverage:
         """Force a fresh build (no cache) to cover lines 169-204 + _generate_main."""
         from rac import compile, compile_to_binary, parse
 
-        module = parse("""
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.20
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-        """)
+        module = parse(TAX_MODEL_SOURCE)
         ir = compile([module], as_of=date(2024, 6, 1))
         binary = compile_to_binary(ir, cache=False)
         assert binary.binary_path.exists()
@@ -1968,13 +1913,20 @@ class TestModelCoverage:
     def tax_model(self):
         from rac import Model
 
+        return Model.from_source(TAX_MODEL_SOURCE, as_of=date(2024, 6, 1))
+
+    @pytest.fixture
+    def reform_model(self):
+        """Reform model with rate 0.25 (vs baseline 0.20)."""
+        from rac import Model
+
         return Model.from_source(
             """
             entity person:
                 income: float
 
             variable gov/rate:
-                from 2024-01-01: 0.20
+                from 2024-01-01: 0.25
 
             variable person/tax:
                 entity: person
@@ -1984,7 +1936,6 @@ class TestModelCoverage:
         )
 
     def test_model_run(self, tax_model):
-
         data = {"person": [{"id": 1, "income": 50000.0}, {"id": 2, "income": 100000.0}]}
         result = tax_model.run(data)
         assert "person" in result.arrays
@@ -2011,10 +1962,9 @@ class TestModelCoverage:
         assert abs(dicts[0]["person/tax"] - 10000.0) < 0.01
 
     def test_model_compare(self, tax_model):
-
         from rac import Model
 
-        reform_model = Model.from_source(
+        amend_model = Model.from_source(
             """
             entity person:
                 income: float
@@ -2034,30 +1984,12 @@ class TestModelCoverage:
         )
 
         data = {"person": [{"id": 1, "income": 50000.0}, {"id": 2, "income": 100000.0}]}
-        comparison = tax_model.compare(reform_model, data)
+        comparison = tax_model.compare(amend_model, data)
 
         assert "person" in comparison.n_rows
         assert comparison.n_rows["person"] == 2
 
-    def test_compare_result_gain(self, tax_model):
-
-        from rac import Model
-
-        reform_model = Model.from_source(
-            """
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.25
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-            """,
-            as_of=date(2024, 6, 1),
-        )
-
+    def test_compare_result_gain(self, tax_model, reform_model):
         data = {"person": [{"id": 1, "income": 50000.0}]}
         comparison = tax_model.compare(reform_model, data)
         gain = comparison.gain("person", "person/tax")
@@ -2065,25 +1997,7 @@ class TestModelCoverage:
         # Reform tax: 12500, baseline tax: 10000, gain = +2500
         assert abs(gain[0] - 2500.0) < 0.01
 
-    def test_compare_result_summary(self, tax_model):
-
-        from rac import Model
-
-        reform_model = Model.from_source(
-            """
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.25
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-            """,
-            as_of=date(2024, 6, 1),
-        )
-
+    def test_compare_result_summary(self, tax_model, reform_model):
         data = {
             "person": [
                 {"id": i, "income": float(10000 + i * 10000)} for i in range(1, 21)
@@ -2098,25 +2012,8 @@ class TestModelCoverage:
         assert "winners" in summary
         assert "losers" in summary
 
-    def test_compare_result_summary_with_income_deciles(self, tax_model):
+    def test_compare_result_summary_with_income_deciles(self, tax_model, reform_model):
         import numpy as np
-
-        from rac import Model
-
-        reform_model = Model.from_source(
-            """
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.25
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-            """,
-            as_of=date(2024, 6, 1),
-        )
 
         data = {
             "person": [
@@ -2132,26 +2029,9 @@ class TestModelCoverage:
         assert "avg_income" in summary["by_decile"][0]
         assert "avg_gain" in summary["by_decile"][0]
 
-    def test_compare_result_summary_empty_decile(self, tax_model):
+    def test_compare_result_summary_empty_decile(self, tax_model, reform_model):
         """Cover model.py line 71: empty decile skipped."""
         import numpy as np
-
-        from rac import Model
-
-        reform_model = Model.from_source(
-            """
-            entity person:
-                income: float
-
-            variable gov/rate:
-                from 2024-01-01: 0.25
-
-            variable person/tax:
-                entity: person
-                from 2024-01-01: income * gov/rate
-            """,
-            as_of=date(2024, 6, 1),
-        )
 
         # Very small dataset where some deciles will be empty
         data = {"person": [{"id": 1, "income": 50000.0}, {"id": 2, "income": 50000.0}]}
